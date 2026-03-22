@@ -1,13 +1,9 @@
 import Foundation
 
 public enum Translation: String, Codable, CaseIterable, Identifiable, Sendable {
-    case niv = "NIV"
-    case esv = "ESV"
     case kjv = "KJV"
     case nkjv = "NKJV"
-    case nasb = "NASB"
-    case nlt = "NLT"
-    case csb = "CSB"
+    case korean = "개역한글"
 
     public var id: String { rawValue }
 }
@@ -44,8 +40,8 @@ public enum VerseDifficulty: String, Codable, CaseIterable, Identifiable, Sendab
 public struct MemoryVerse: Identifiable, Codable, Hashable, Sendable {
     public let id: UUID
     public var reference: BibleReference
-    public var translation: Translation
-    public var text: String
+    public var defaultTranslation: Translation
+    public var textsByTranslation: [Translation: String]
     public var tags: [String]
     public var difficulty: VerseDifficulty
     public var createdAt: Date
@@ -53,19 +49,25 @@ public struct MemoryVerse: Identifiable, Codable, Hashable, Sendable {
     public init(
         id: UUID = UUID(),
         reference: BibleReference,
-        translation: Translation,
-        text: String,
+        defaultTranslation: Translation = .nkjv,
+        textsByTranslation: [Translation: String],
         tags: [String] = [],
         difficulty: VerseDifficulty = .medium,
         createdAt: Date = .now
     ) {
         self.id = id
         self.reference = reference
-        self.translation = translation
-        self.text = text
+        self.defaultTranslation = defaultTranslation
+        self.textsByTranslation = textsByTranslation
         self.tags = tags
         self.difficulty = difficulty
         self.createdAt = createdAt
+    }
+
+    public func text(for translation: Translation) -> String {
+        textsByTranslation[translation]
+            ?? textsByTranslation[defaultTranslation]
+            ?? ""
     }
 }
 

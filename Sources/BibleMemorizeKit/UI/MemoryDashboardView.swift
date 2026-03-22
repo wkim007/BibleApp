@@ -14,16 +14,28 @@ public struct MemoryDashboardView: View {
     }
 
     public var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    statsSection
-                    dueSection
-                    upcomingSection
+        TabView {
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        statsSection
+                        dueSection
+                        upcomingSection
+                    }
+                    .padding(20)
                 }
-                .padding(20)
+                .navigationTitle("Bible Memorize")
             }
-            .navigationTitle("Bible Memorize")
+            .tabItem {
+                Label("Review", systemImage: "book.closed")
+            }
+
+            NavigationStack {
+                SettingsView(store: viewModel.store)
+            }
+            .tabItem {
+                Label("Settings", systemImage: "gearshape")
+            }
         }
     }
 
@@ -64,7 +76,7 @@ public struct MemoryDashboardView: View {
                 .font(.headline)
 
             ForEach(viewModel.store.dueCards) { card in
-                VerseRow(card: card)
+                VerseRow(card: card, translation: viewModel.store.selectedTranslation)
             }
         }
     }
@@ -75,9 +87,31 @@ public struct MemoryDashboardView: View {
                 .font(.headline)
 
             ForEach(viewModel.store.upcomingCards) { card in
-                VerseRow(card: card)
+                VerseRow(card: card, translation: viewModel.store.selectedTranslation)
             }
         }
+    }
+}
+
+private struct SettingsView: View {
+    @Bindable var store: BibleMemorizeStore
+
+    var body: some View {
+        Form {
+            Section("Bible") {
+                Picker("Version", selection: $store.selectedTranslation) {
+                    ForEach(Translation.allCases) { translation in
+                        Text(translation.rawValue).tag(translation)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                Text("All verses in the app follow the selected Bible version.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .navigationTitle("Settings")
     }
 }
 
@@ -102,16 +136,17 @@ private struct StatCard: View {
 
 private struct VerseRow: View {
     let card: MemorizationCard
+    let translation: Translation
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(card.verse.reference.formatted)
                 .font(.headline)
-            Text(card.verse.text)
+            Text(card.verse.text(for: translation))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .lineLimit(3)
-            Text("Translation: \(card.verse.translation.rawValue)")
+            Text("Translation: \(translation.rawValue)")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }

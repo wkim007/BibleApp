@@ -7,23 +7,27 @@ public final class BibleMemorizeStore {
     public private(set) var cards: [MemorizationCard]
     public private(set) var collections: [MemorizationCollection]
     public private(set) var todaysSession: MemorizationSession?
+    public var selectedTranslation: Translation
 
     private let scheduler: MemorizationScheduler
 
     public init(
         cards: [MemorizationCard],
         collections: [MemorizationCollection],
+        selectedTranslation: Translation = .nkjv,
         scheduler: MemorizationScheduler = MemorizationScheduler()
     ) {
         self.cards = cards
         self.collections = collections
+        self.selectedTranslation = selectedTranslation
         self.scheduler = scheduler
     }
 
     public convenience init() {
         self.init(
             cards: SampleData.seedCards,
-            collections: SampleData.seedCollections
+            collections: SampleData.seedCollections,
+            selectedTranslation: .nkjv
         )
     }
 
@@ -48,8 +52,8 @@ public final class BibleMemorizeStore {
     ) {
         let verse = MemoryVerse(
             reference: reference,
-            translation: translation,
-            text: text,
+            defaultTranslation: translation,
+            textsByTranslation: [translation: text],
             tags: tags,
             difficulty: difficulty
         )
@@ -59,7 +63,17 @@ public final class BibleMemorizeStore {
 
     public func startSession(limit: Int = 10) {
         let sessionCards = Array(dueCards.prefix(limit))
-        todaysSession = MemorizationSession(cards: sessionCards)
+        todaysSession = MemorizationSession(cards: sessionCards, translation: selectedTranslation)
+    }
+
+    public func updateSelectedTranslation(_ translation: Translation) {
+        selectedTranslation = translation
+        if let session = todaysSession {
+            let remainingCards = session.prompts.compactMap { prompt in
+                cards.first(where: { $0.id == prompt.cardID })
+            }
+            todaysSession = MemorizationSession(cards: remainingCards, translation: translation)
+        }
     }
 
     @discardableResult

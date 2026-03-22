@@ -7,12 +7,12 @@ public struct SessionPrompt: Identifiable, Hashable, Sendable {
     public let promptText: String
     public let maskedWords: [String]
 
-    public init(card: MemorizationCard) {
+    public init(card: MemorizationCard, translation: Translation) {
         self.id = card.id
         self.cardID = card.id
         self.reference = card.verse.reference.formatted
-        self.promptText = card.verse.text
-        self.maskedWords = Self.makeMask(from: card.verse.text)
+        self.promptText = card.verse.text(for: translation)
+        self.maskedWords = Self.makeMask(from: card.verse.text(for: translation))
     }
 
     private static func makeMask(from text: String) -> [String] {
@@ -43,8 +43,8 @@ public struct MemorizationSession: Sendable {
     public private(set) var grades: [RecallGrade]
     public private(set) var startedAt: Date
 
-    public init(cards: [MemorizationCard], startedAt: Date = .now) {
-        self.prompts = cards.map(SessionPrompt.init)
+    public init(cards: [MemorizationCard], translation: Translation, startedAt: Date = .now) {
+        self.prompts = cards.map { SessionPrompt(card: $0, translation: translation) }
         self.currentIndex = 0
         self.grades = []
         self.startedAt = startedAt
