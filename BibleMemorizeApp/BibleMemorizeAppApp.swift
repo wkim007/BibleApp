@@ -6,6 +6,7 @@ struct BibleMemorizeAppApp: App {
     var body: some Scene {
         WindowGroup {
             MemoryDashboardView()
+                .preferredColorScheme(.dark)
         }
     }
 }

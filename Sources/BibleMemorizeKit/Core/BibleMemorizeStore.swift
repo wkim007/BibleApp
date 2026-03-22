@@ -8,6 +8,7 @@ public final class BibleMemorizeStore {
     public private(set) var collections: [MemorizationCollection]
     public private(set) var todaysSession: MemorizationSession?
     public var selectedTranslation: Translation
+    public var speechRateMultiplier: Double
 
     private let scheduler: MemorizationScheduler
 
@@ -15,11 +16,13 @@ public final class BibleMemorizeStore {
         cards: [MemorizationCard],
         collections: [MemorizationCollection],
         selectedTranslation: Translation = .nkjv,
+        speechRateMultiplier: Double = 1.0,
         scheduler: MemorizationScheduler = MemorizationScheduler()
     ) {
         self.cards = cards
         self.collections = collections
         self.selectedTranslation = selectedTranslation
+        self.speechRateMultiplier = speechRateMultiplier
         self.scheduler = scheduler
     }
 
@@ -27,7 +30,8 @@ public final class BibleMemorizeStore {
         self.init(
             cards: SampleData.seedCards,
             collections: SampleData.seedCollections,
-            selectedTranslation: .nkjv
+            selectedTranslation: .nkjv,
+            speechRateMultiplier: 1.0
         )
     }
 

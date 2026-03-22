@@ -4,8 +4,29 @@ public enum Translation: String, Codable, CaseIterable, Identifiable, Sendable {
     case kjv = "KJV"
     case nkjv = "NKJV"
     case korean = "개역한글"
+    case chinese = "中文"
+    case spanish = "Español"
+    case japanese = "日本語"
+    case german = "Deutsch"
 
     public var id: String { rawValue }
+
+    public var speechLanguageCode: String {
+        switch self {
+        case .kjv, .nkjv:
+            return "en-US"
+        case .korean:
+            return "ko-KR"
+        case .chinese:
+            return "zh-CN"
+        case .spanish:
+            return "es-ES"
+        case .japanese:
+            return "ja-JP"
+        case .german:
+            return "de-DE"
+        }
+    }
 }
 
 public struct BibleReference: Codable, Hashable, Sendable {

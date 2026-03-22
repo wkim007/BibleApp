@@ -1,7 +1,9 @@
 import SwiftUI
+import AVFoundation
 
 public struct MemoryDashboardView: View {
     @State private var viewModel: DashboardViewModel
+    @State private var speaker = VerseSpeaker()
 
     @MainActor
     public init(viewModel: DashboardViewModel) {
@@ -37,6 +39,7 @@ public struct MemoryDashboardView: View {
                 Label("Settings", systemImage: "gearshape")
             }
         }
+        .preferredColorScheme(.dark)
     }
 
     private var statsSection: some View {
@@ -57,8 +60,25 @@ public struct MemoryDashboardView: View {
 
             if let prompt = viewModel.store.todaysSession?.currentPrompt {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(prompt.reference)
-                        .font(.headline)
+                    HStack(alignment: .top) {
+                        Text(prompt.reference)
+                            .font(.headline)
+
+                        Spacer()
+
+                        Button {
+                            speaker.speak(
+                                text: prompt.promptText,
+                                translation: viewModel.store.selectedTranslation,
+                                speedMultiplier: viewModel.store.speechRateMultiplier
+                            )
+                        } label: {
+                            Image(systemName: "speaker.wave.2.fill")
+                                .font(.headline)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Speak verse")
+                    }
                     Text(prompt.maskedWords.joined(separator: " "))
                         .foregroundStyle(.secondary)
                 }
@@ -76,7 +96,12 @@ public struct MemoryDashboardView: View {
                 .font(.headline)
 
             ForEach(viewModel.store.dueCards) { card in
-                VerseRow(card: card, translation: viewModel.store.selectedTranslation)
+                VerseRow(
+                    card: card,
+                    translation: viewModel.store.selectedTranslation,
+                    speaker: speaker,
+                    speedMultiplier: viewModel.store.speechRateMultiplier
+                )
             }
         }
     }
@@ -87,7 +112,12 @@ public struct MemoryDashboardView: View {
                 .font(.headline)
 
             ForEach(viewModel.store.upcomingCards) { card in
-                VerseRow(card: card, translation: viewModel.store.selectedTranslation)
+                VerseRow(
+                    card: card,
+                    translation: viewModel.store.selectedTranslation,
+                    speaker: speaker,
+                    speedMultiplier: viewModel.store.speechRateMultiplier
+                )
             }
         }
     }
@@ -99,7 +129,13 @@ private struct SettingsView: View {
     var body: some View {
         Form {
             Section("Bible") {
-                Picker("Version", selection: $store.selectedTranslation) {
+                Picker(
+                    "Version",
+                    selection: Binding(
+                        get: { store.selectedTranslation },
+                        set: { store.updateSelectedTranslation($0) }
+                    )
+                ) {
                     ForEach(Translation.allCases) { translation in
                         Text(translation.rawValue).tag(translation)
                     }
@@ -107,6 +143,37 @@ private struct SettingsView: View {
                 .pickerStyle(.menu)
 
                 Text("All verses in the app follow the selected Bible version.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Speech Speed") {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Speed")
+                        Spacer()
+                        Text(String(format: "%.1fx", store.speechRateMultiplier))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Slider(
+                        value: $store.speechRateMultiplier,
+                        in: 0.1...2.0,
+                        step: 0.1
+                    )
+
+                    HStack {
+                        Text("0.1x")
+                        Spacer()
+                        Text("1.0x")
+                        Spacer()
+                        Text("2.0x")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+
+                Text("1.0x is normal speed. Lower values speak more slowly, and higher values speak faster.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -137,11 +204,30 @@ private struct StatCard: View {
 private struct VerseRow: View {
     let card: MemorizationCard
     let translation: Translation
+    let speaker: VerseSpeaker
+    let speedMultiplier: Double
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(card.verse.reference.formatted)
-                .font(.headline)
+            HStack(alignment: .top) {
+                Text(card.verse.reference.formatted)
+                    .font(.headline)
+
+                Spacer()
+
+                Button {
+                    speaker.speak(
+                        text: card.verse.text(for: translation),
+                        translation: translation,
+                        speedMultiplier: speedMultiplier
+                    )
+                } label: {
+                    Image(systemName: "speaker.wave.2.fill")
+                        .font(.headline)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Speak verse")
+            }
             Text(card.verse.text(for: translation))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -154,5 +240,23 @@ private struct VerseRow: View {
         .padding()
         .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+}
+
+@MainActor
+private final class VerseSpeaker {
+    private let synthesizer = AVSpeechSynthesizer()
+
+    func speak(text: String, translation: Translation, speedMultiplier: Double) {
+        if synthesizer.isSpeaking {
+            synthesizer.stopSpeaking(at: .immediate)
+        }
+
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = AVSpeechSynthesisVoice(language: translation.speechLanguageCode)
+        let normalizedMultiplier = min(max(speedMultiplier, 0.1), 2.0)
+        let scaledRate = AVSpeechUtteranceDefaultSpeechRate * Float(normalizedMultiplier)
+        utterance.rate = min(max(scaledRate, AVSpeechUtteranceMinimumSpeechRate), AVSpeechUtteranceMaximumSpeechRate)
+        synthesizer.speak(utterance)
     }
 }
