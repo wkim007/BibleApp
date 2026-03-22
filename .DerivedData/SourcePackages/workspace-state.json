@@ -1,0 +1,27 @@
+{
+  "object" : {
+    "artifacts" : [
+
+    ],
+    "dependencies" : [
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "bibleapp",
+          "kind" : "fileSystem",
+          "location" : "/Users/MacBook/Desktop/AI_Project/BibleApp",
+          "name" : "BibleMemorizeKit"
+        },
+        "state" : {
+          "name" : "fileSystem",
+          "path" : "/Users/MacBook/Desktop/AI_Project/BibleApp"
+        },
+        "subpath" : "bibleapp"
+      }
+    ],
+    "prebuilts" : [
+
+    ]
+  },
+  "version" : 7
+}

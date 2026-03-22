@@ -1,0 +1,54 @@
+{
+  "": {
+    "swift-dependencies": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/master.swiftdeps"
+  },
+  "/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Core/BibleMemorizeStore.swift": {
+    "dependencies": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/BibleMemorizeStore.d",
+    "object": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/BibleMemorizeStore.swift.o",
+    "swiftmodule": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/BibleMemorizeStore~partial.swiftmodule",
+    "swift-dependencies": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/BibleMemorizeStore.swiftdeps",
+    "diagnostics": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/BibleMemorizeStore.dia"
+  },
+  "/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Core/MemorizationScheduler.swift": {
+    "dependencies": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemorizationScheduler.d",
+    "object": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemorizationScheduler.swift.o",
+    "swiftmodule": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemorizationScheduler~partial.swiftmodule",
+    "swift-dependencies": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemorizationScheduler.swiftdeps",
+    "diagnostics": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemorizationScheduler.dia"
+  },
+  "/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Core/MemorizationSession.swift": {
+    "dependencies": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemorizationSession.d",
+    "object": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemorizationSession.swift.o",
+    "swiftmodule": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemorizationSession~partial.swiftmodule",
+    "swift-dependencies": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemorizationSession.swiftdeps",
+    "diagnostics": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemorizationSession.dia"
+  },
+  "/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Models/MemorizationModels.swift": {
+    "dependencies": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemorizationModels.d",
+    "object": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemorizationModels.swift.o",
+    "swiftmodule": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemorizationModels~partial.swiftmodule",
+    "swift-dependencies": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemorizationModels.swiftdeps",
+    "diagnostics": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemorizationModels.dia"
+  },
+  "/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Support/SampleData.swift": {
+    "dependencies": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/SampleData.d",
+    "object": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/SampleData.swift.o",
+    "swiftmodule": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/SampleData~partial.swiftmodule",
+    "swift-dependencies": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/SampleData.swiftdeps",
+    "diagnostics": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/SampleData.dia"
+  },
+  "/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/UI/DashboardViewModel.swift": {
+    "dependencies": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/DashboardViewModel.d",
+    "object": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/DashboardViewModel.swift.o",
+    "swiftmodule": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/DashboardViewModel~partial.swiftmodule",
+    "swift-dependencies": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/DashboardViewModel.swiftdeps",
+    "diagnostics": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/DashboardViewModel.dia"
+  },
+  "/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/UI/MemoryDashboardView.swift": {
+    "dependencies": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemoryDashboardView.d",
+    "object": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemoryDashboardView.swift.o",
+    "swiftmodule": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemoryDashboardView~partial.swiftmodule",
+    "swift-dependencies": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemoryDashboardView.swiftdeps",
+    "diagnostics": "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemoryDashboardView.dia"
+  }
+}

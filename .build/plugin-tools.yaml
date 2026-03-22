@@ -1,0 +1,47 @@
+client:
+  name: basic
+  file-system: device-agnostic
+tools: {}
+targets:
+  "BibleMemorizeKit-arm64-apple-macosx26.0-debug.module": ["<BibleMemorizeKit-arm64-apple-macosx26.0-debug.module>"]
+  "PackageStructure": ["<PackageStructure>"]
+  "main": ["<BibleMemorizeKit-arm64-apple-macosx26.0-debug.module>"]
+  "test": ["<BibleMemorizeKit-arm64-apple-macosx26.0-debug.module>"]
+default: "main"
+nodes:
+  "/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/":
+    is-directory-structure: true
+    content-exclusion-patterns: [".git",".build"]
+commands:
+  "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/sources":
+    tool: write-auxiliary-file
+    inputs: ["<sources-file-list>","/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Core/BibleMemorizeStore.swift","/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Core/MemorizationScheduler.swift","/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Core/MemorizationSession.swift","/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Models/MemorizationModels.swift","/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Support/SampleData.swift","/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/UI/DashboardViewModel.swift","/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/UI/MemoryDashboardView.swift"]
+    outputs: ["/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/sources"]
+    description: "Write auxiliary file /Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/sources"
+
+  "/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt":
+    tool: write-auxiliary-file
+    inputs: ["<swift-get-version>","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"]
+    outputs: ["/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"]
+    always-out-of-date: "true"
+    description: "Write auxiliary file /Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+
+  "<BibleMemorizeKit-arm64-apple-macosx26.0-debug.module>":
+    tool: phony
+    inputs: ["/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/BibleMemorizeStore.swift.o","/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemorizationScheduler.swift.o","/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemorizationSession.swift.o","/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemorizationModels.swift.o","/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/SampleData.swift.o","/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/DashboardViewModel.swift.o","/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemoryDashboardView.swift.o","/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/Modules/BibleMemorizeKit.swiftmodule"]
+    outputs: ["<BibleMemorizeKit-arm64-apple-macosx26.0-debug.module>"]
+
+  "C.BibleMemorizeKit-arm64-apple-macosx26.0-debug.module":
+    tool: shell
+    inputs: ["/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Core/BibleMemorizeStore.swift","/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Core/MemorizationScheduler.swift","/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Core/MemorizationSession.swift","/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Models/MemorizationModels.swift","/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Support/SampleData.swift","/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/UI/DashboardViewModel.swift","/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/UI/MemoryDashboardView.swift","/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt","/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/sources"]
+    outputs: ["/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/BibleMemorizeStore.swift.o","/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemorizationScheduler.swift.o","/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemorizationSession.swift.o","/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemorizationModels.swift.o","/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/SampleData.swift.o","/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/DashboardViewModel.swift.o","/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/MemoryDashboardView.swift.o","/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/Modules/BibleMemorizeKit.swiftmodule"]
+    description: "Compiling Swift Module 'BibleMemorizeKit' (7 sources)"
+    args: ["/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc","-module-name","BibleMemorizeKit","-emit-dependencies","-emit-module","-emit-module-path","/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/Modules/BibleMemorizeKit.swiftmodule","-output-file-map","/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/output-file-map.json","-parse-as-library","-incremental","-c","@/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/sources","-I","/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/Modules","-target","arm64-apple-macosx14.0","-incremental","-enable-batch-mode","-serialize-diagnostics","-index-store-path","/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/index/store","-Onone","-enable-testing","-j12","-DSWIFT_PACKAGE","-DDEBUG","-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE","-module-cache-path","/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/ModuleCache","-parseable-output","-parse-as-library","-emit-objc-header","-emit-objc-header-path","/Users/MacBook/Desktop/AI_Project/BibleApp/.build/arm64-apple-macosx/debug/BibleMemorizeKit.build/include/BibleMemorizeKit-Swift.h","-swift-version","5","-plugin-path","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing","-sdk","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-I","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-L","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-g","-Xcc","-isysroot","-Xcc","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk","-Xcc","-F","-Xcc","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-Xcc","-F","-Xcc","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-Xcc","-fPIC","-Xcc","-g","-package-name","bibleapp"]
+
+  "PackageStructure":
+    tool: package-structure-tool
+    inputs: ["/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/","/Users/MacBook/Desktop/AI_Project/BibleApp/Package.swift","/Users/MacBook/Desktop/AI_Project/BibleApp/Package.resolved"]
+    outputs: ["<PackageStructure>"]
+    description: "Planning build"
+    allow-missing-inputs: true
+
