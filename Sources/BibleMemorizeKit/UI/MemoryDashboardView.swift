@@ -3,7 +3,7 @@ import AVFoundation
 
 public struct MemoryDashboardView: View {
     @State private var viewModel: DashboardViewModel
-    @State private var speaker = VerseSpeaker()
+    @StateObject private var speaker = VerseSpeaker()
 
     @MainActor
     public init(viewModel: DashboardViewModel) {
@@ -66,18 +66,7 @@ public struct MemoryDashboardView: View {
 
                         Spacer()
 
-                        Button {
-                            speaker.speak(
-                                text: prompt.promptText,
-                                translation: viewModel.store.selectedTranslation,
-                                speedMultiplier: viewModel.store.speechRateMultiplier
-                            )
-                        } label: {
-                            Image(systemName: "speaker.wave.2.fill")
-                                .font(.headline)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Speak verse")
+                        controls(for: prompt.cardID, text: prompt.promptText)
                     }
                     Text(prompt.maskedWords.joined(separator: " "))
                         .foregroundStyle(.secondary)
@@ -119,6 +108,46 @@ public struct MemoryDashboardView: View {
                     speedMultiplier: viewModel.store.speechRateMultiplier
                 )
             }
+        }
+    }
+
+    @ViewBuilder
+    private func controls(for verseID: UUID, text: String) -> some View {
+        HStack(spacing: 14) {
+            Button {
+                speaker.speak(
+                    verseID: verseID,
+                    text: text,
+                    translation: viewModel.store.selectedTranslation,
+                    speedMultiplier: viewModel.store.speechRateMultiplier
+                )
+            } label: {
+                Image(systemName: "speaker.wave.2.fill")
+                    .font(.headline)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Speak verse")
+
+            Button {
+                speaker.advanceRepeatMode(for: verseID)
+            } label: {
+                Image(systemName: "repeat")
+                    .font(.headline)
+                    .overlay(alignment: .topTrailing) {
+                        if let label = speaker.repeatBadge(for: verseID) {
+                            Text(label)
+                                .font(.caption2.bold())
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(.blue)
+                                .foregroundStyle(.white)
+                                .clipShape(Capsule())
+                                .offset(x: 12, y: -8)
+                        }
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Repeat verse")
         }
     }
 }
@@ -204,7 +233,7 @@ private struct StatCard: View {
 private struct VerseRow: View {
     let card: MemorizationCard
     let translation: Translation
-    let speaker: VerseSpeaker
+    @ObservedObject var speaker: VerseSpeaker
     let speedMultiplier: Double
 
     var body: some View {
@@ -215,18 +244,42 @@ private struct VerseRow: View {
 
                 Spacer()
 
-                Button {
-                    speaker.speak(
-                        text: card.verse.text(for: translation),
-                        translation: translation,
-                        speedMultiplier: speedMultiplier
-                    )
-                } label: {
-                    Image(systemName: "speaker.wave.2.fill")
-                        .font(.headline)
+                HStack(spacing: 14) {
+                    Button {
+                        speaker.speak(
+                            verseID: card.id,
+                            text: card.verse.text(for: translation),
+                            translation: translation,
+                            speedMultiplier: speedMultiplier
+                        )
+                    } label: {
+                        Image(systemName: "speaker.wave.2.fill")
+                            .font(.headline)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Speak verse")
+
+                    Button {
+                        speaker.advanceRepeatMode(for: card.id)
+                    } label: {
+                        Image(systemName: "repeat")
+                            .font(.headline)
+                            .overlay(alignment: .topTrailing) {
+                                if let label = speaker.repeatBadge(for: card.id) {
+                                    Text(label)
+                                        .font(.caption2.bold())
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 1)
+                                        .background(.blue)
+                                        .foregroundStyle(.white)
+                                        .clipShape(Capsule())
+                                        .offset(x: 12, y: -8)
+                                }
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Repeat verse")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Speak verse")
             }
             Text(card.verse.text(for: translation))
                 .font(.subheadline)
@@ -244,19 +297,141 @@ private struct VerseRow: View {
 }
 
 @MainActor
-private final class VerseSpeaker {
-    private let synthesizer = AVSpeechSynthesizer()
+private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
+    @Published private var repeatModes: [UUID: RepeatMode] = [:]
 
-    func speak(text: String, translation: Translation, speedMultiplier: Double) {
+    private let synthesizer = AVSpeechSynthesizer()
+    private var activePlayback: ActivePlayback?
+
+    override init() {
+        super.init()
+        synthesizer.delegate = self
+    }
+
+    func speak(
+        verseID: UUID,
+        text: String,
+        translation: Translation,
+        speedMultiplier: Double
+    ) {
+        activePlayback = ActivePlayback(
+            verseID: verseID,
+            text: text,
+            translation: translation,
+            speedMultiplier: speedMultiplier,
+            remainingLoops: repeatModes[verseID] ?? .off
+        )
+
         if synthesizer.isSpeaking {
             synthesizer.stopSpeaking(at: .immediate)
         }
 
+        let utterance = makeUtterance(
+            text: text,
+            translation: translation,
+            speedMultiplier: speedMultiplier
+        )
+        synthesizer.speak(utterance)
+    }
+
+    func advanceRepeatMode(for verseID: UUID) {
+        let nextMode = (repeatModes[verseID] ?? .off).next
+        repeatModes[verseID] = nextMode
+
+        if activePlayback?.verseID == verseID {
+            activePlayback?.remainingLoops = nextMode
+        }
+    }
+
+    func repeatBadge(for verseID: UUID) -> String? {
+        switch repeatModes[verseID] ?? .off {
+        case .off:
+            return nil
+        case .once:
+            return "+1"
+        case .twice:
+            return "+2"
+        case .infinite:
+            return "\u{221E}"
+        }
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        guard var playback = activePlayback else { return }
+
+        switch playback.remainingLoops {
+        case .off:
+            activePlayback = nil
+        case .once:
+            playback.remainingLoops = .off
+            activePlayback = playback
+            synthesizer.speak(
+                makeUtterance(
+                    text: playback.text,
+                    translation: playback.translation,
+                    speedMultiplier: playback.speedMultiplier
+                )
+            )
+        case .twice:
+            playback.remainingLoops = .once
+            activePlayback = playback
+            synthesizer.speak(
+                makeUtterance(
+                    text: playback.text,
+                    translation: playback.translation,
+                    speedMultiplier: playback.speedMultiplier
+                )
+            )
+        case .infinite:
+            activePlayback = playback
+            synthesizer.speak(
+                makeUtterance(
+                    text: playback.text,
+                    translation: playback.translation,
+                    speedMultiplier: playback.speedMultiplier
+                )
+            )
+        }
+    }
+
+    private func makeUtterance(
+        text: String,
+        translation: Translation,
+        speedMultiplier: Double
+    ) -> AVSpeechUtterance {
         let utterance = AVSpeechUtterance(string: text)
         utterance.voice = AVSpeechSynthesisVoice(language: translation.speechLanguageCode)
         let normalizedMultiplier = min(max(speedMultiplier, 0.1), 2.0)
         let scaledRate = AVSpeechUtteranceDefaultSpeechRate * Float(normalizedMultiplier)
         utterance.rate = min(max(scaledRate, AVSpeechUtteranceMinimumSpeechRate), AVSpeechUtteranceMaximumSpeechRate)
-        synthesizer.speak(utterance)
+        return utterance
     }
+}
+
+private enum RepeatMode: Equatable {
+    case off
+    case once
+    case twice
+    case infinite
+
+    var next: RepeatMode {
+        switch self {
+        case .off:
+            return .once
+        case .once:
+            return .twice
+        case .twice:
+            return .infinite
+        case .infinite:
+            return .off
+        }
+    }
+}
+
+private struct ActivePlayback {
+    let verseID: UUID
+    let text: String
+    let translation: Translation
+    let speedMultiplier: Double
+    var remainingLoops: RepeatMode
 }
