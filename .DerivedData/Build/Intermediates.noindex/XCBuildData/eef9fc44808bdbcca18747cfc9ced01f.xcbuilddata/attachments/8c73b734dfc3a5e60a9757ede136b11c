@@ -1,0 +1,79 @@
+{
+  "" : {
+    "diagnostics" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/BibleMemorizeKit-primary.dia",
+    "emit-module-dependencies" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/BibleMemorizeKit-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/BibleMemorizeKit-primary-emit-module.dia",
+    "pch" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/BibleMemorizeKit-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/BibleMemorizeKit-primary.swiftdeps"
+  },
+  "/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Core/BibleMemorizeStore.swift" : {
+    "const-values" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/BibleMemorizeStore.swiftconstvalues",
+    "dependencies" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/BibleMemorizeStore.d",
+    "diagnostics" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/BibleMemorizeStore.dia",
+    "index-unit-output-path" : "/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/BibleMemorizeStore.o",
+    "llvm-bc" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/BibleMemorizeStore.bc",
+    "object" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/BibleMemorizeStore.o",
+    "swift-dependencies" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/BibleMemorizeStore.swiftdeps",
+    "swiftmodule" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/BibleMemorizeStore~partial.swiftmodule"
+  },
+  "/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Core/MemorizationScheduler.swift" : {
+    "const-values" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationScheduler.swiftconstvalues",
+    "dependencies" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationScheduler.d",
+    "diagnostics" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationScheduler.dia",
+    "index-unit-output-path" : "/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationScheduler.o",
+    "llvm-bc" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationScheduler.bc",
+    "object" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationScheduler.o",
+    "swift-dependencies" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationScheduler.swiftdeps",
+    "swiftmodule" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationScheduler~partial.swiftmodule"
+  },
+  "/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Core/MemorizationSession.swift" : {
+    "const-values" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationSession.swiftconstvalues",
+    "dependencies" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationSession.d",
+    "diagnostics" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationSession.dia",
+    "index-unit-output-path" : "/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationSession.o",
+    "llvm-bc" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationSession.bc",
+    "object" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationSession.o",
+    "swift-dependencies" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationSession.swiftdeps",
+    "swiftmodule" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationSession~partial.swiftmodule"
+  },
+  "/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Models/MemorizationModels.swift" : {
+    "const-values" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationModels.swiftconstvalues",
+    "dependencies" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationModels.d",
+    "diagnostics" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationModels.dia",
+    "index-unit-output-path" : "/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationModels.o",
+    "llvm-bc" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationModels.bc",
+    "object" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationModels.o",
+    "swift-dependencies" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationModels.swiftdeps",
+    "swiftmodule" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemorizationModels~partial.swiftmodule"
+  },
+  "/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Support/SampleData.swift" : {
+    "const-values" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/SampleData.swiftconstvalues",
+    "dependencies" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/SampleData.d",
+    "diagnostics" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/SampleData.dia",
+    "index-unit-output-path" : "/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/SampleData.o",
+    "llvm-bc" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/SampleData.bc",
+    "object" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/SampleData.o",
+    "swift-dependencies" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/SampleData.swiftdeps",
+    "swiftmodule" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/SampleData~partial.swiftmodule"
+  },
+  "/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/UI/DashboardViewModel.swift" : {
+    "const-values" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/DashboardViewModel.swiftconstvalues",
+    "dependencies" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/DashboardViewModel.d",
+    "diagnostics" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/DashboardViewModel.dia",
+    "index-unit-output-path" : "/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/DashboardViewModel.o",
+    "llvm-bc" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/DashboardViewModel.bc",
+    "object" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/DashboardViewModel.o",
+    "swift-dependencies" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/DashboardViewModel.swiftdeps",
+    "swiftmodule" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/DashboardViewModel~partial.swiftmodule"
+  },
+  "/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/UI/MemoryDashboardView.swift" : {
+    "const-values" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemoryDashboardView.swiftconstvalues",
+    "dependencies" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemoryDashboardView.d",
+    "diagnostics" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemoryDashboardView.dia",
+    "index-unit-output-path" : "/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemoryDashboardView.o",
+    "llvm-bc" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemoryDashboardView.bc",
+    "object" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemoryDashboardView.o",
+    "swift-dependencies" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemoryDashboardView.swiftdeps",
+    "swiftmodule" : "/Users/MacBook/Desktop/AI_Project/BibleApp/.DerivedData/Build/Intermediates.noindex/BibleMemorizeKit.build/Debug-iphonesimulator/BibleMemorizeKit.build/Objects-normal/x86_64/MemoryDashboardView~partial.swiftmodule"
+  }
+}

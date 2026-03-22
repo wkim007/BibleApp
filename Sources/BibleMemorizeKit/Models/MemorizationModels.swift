@@ -48,6 +48,42 @@ public struct BibleReference: Codable, Hashable, Sendable {
         }
         return "\(book) \(chapter):\(verseStart)"
     }
+
+    public func formatted(for translation: Translation) -> String {
+        let localizedBook = Self.localizedBookName(book, for: translation)
+        if let verseEnd, verseEnd != verseStart {
+            return "\(localizedBook) \(chapter):\(verseStart)-\(verseEnd)"
+        }
+        return "\(localizedBook) \(chapter):\(verseStart)"
+    }
+
+    private static func localizedBookName(_ book: String, for translation: Translation) -> String {
+        let names: [String: [Translation: String]] = [
+            "Joshua": [
+                .korean: "여호수아",
+                .chinese: "约书亚记",
+                .spanish: "Josue",
+                .japanese: "ヨシュア記",
+                .german: "Josua"
+            ],
+            "Romans": [
+                .korean: "로마서",
+                .chinese: "罗马书",
+                .spanish: "Romanos",
+                .japanese: "ローマ人への手紙",
+                .german: "Romer"
+            ],
+            "Psalm": [
+                .korean: "시편",
+                .chinese: "诗篇",
+                .spanish: "Salmos",
+                .japanese: "詩篇",
+                .german: "Psalm"
+            ]
+        ]
+
+        return names[book]?[translation] ?? book
+    }
 }
 
 public enum VerseDifficulty: String, Codable, CaseIterable, Identifiable, Sendable {

@@ -1,0 +1,6 @@
+Target dependency graph (3 targets)
+Target 'BibleMemorizeApp' in project 'BibleMemorizeApp'
+➜ Explicit dependency on target 'BibleMemorizeKit' in project 'BibleMemorizeKit'
+Target 'BibleMemorizeKit' in project 'BibleMemorizeKit'
+➜ Explicit dependency on target 'BibleMemorizeKit' in project 'BibleMemorizeKit'
+Target 'BibleMemorizeKit' in project 'BibleMemorizeKit' (no dependencies)

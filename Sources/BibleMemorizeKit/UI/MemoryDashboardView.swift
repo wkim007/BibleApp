@@ -239,7 +239,7 @@ private struct VerseRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top) {
-                Text(card.verse.reference.formatted)
+                Text(card.verse.reference.formatted(for: translation))
                     .font(.headline)
 
                 Spacer()

@@ -10,7 +10,7 @@ public struct SessionPrompt: Identifiable, Hashable, Sendable {
     public init(card: MemorizationCard, translation: Translation) {
         self.id = card.id
         self.cardID = card.id
-        self.reference = card.verse.reference.formatted
+        self.reference = card.verse.reference.formatted(for: translation)
         self.promptText = card.verse.text(for: translation)
         self.maskedWords = Self.makeMask(from: card.verse.text(for: translation))
     }

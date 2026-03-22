@@ -4,13 +4,25 @@
 <dict>
 	<key>files</key>
 	<dict>
+		<key>AppIcon60x60@2x.png</key>
+		<data>
+		vSPb+jaYtu7m2OTJwWsS5t7SGPg=
+		</data>
+		<key>AppIcon76x76@2x~ipad.png</key>
+		<data>
+		fcDalqXvnwimKpNSmaCdhnyetEw=
+		</data>
+		<key>Assets.car</key>
+		<data>
+		b6H0FG2FCLmHVuSkPnP0GwjjULo=
+		</data>
 		<key>BibleMemorizeApp.debug.dylib</key>
 		<data>
-		JPscxn1EHcVXkLqEJIgLQKOoMtk=
+		BiH0v5YbBp3SWVDDcg5pahRoJNU=
 		</data>
 		<key>Info.plist</key>
 		<data>
-		KN5HUrvyR4xa3rfESxh6FPlu3Is=
+		UzfYWcIap3HZFRsBJD1cjoAz1HI=
 		</data>
 		<key>PkgInfo</key>
 		<data>
@@ -23,11 +35,32 @@
 	</dict>
 	<key>files2</key>
 	<dict>
+		<key>AppIcon60x60@2x.png</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			GH7iTdfew5gucL/Yl109283j1fLJwsO5Crv7g6hV7Hc=
+			</data>
+		</dict>
+		<key>AppIcon76x76@2x~ipad.png</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			xmdqftCYBTJJAX68CSvxue15gkJ7aLh1jlGoaZsc4NM=
+			</data>
+		</dict>
+		<key>Assets.car</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			m7mKheFQYi/plC+i8CUvU70SG1+6Ld/9ad9y4u/LUAI=
+			</data>
+		</dict>
 		<key>BibleMemorizeApp.debug.dylib</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			nptJbyjhhtRnGPcBe9wXT1KI8au7LKyOMksoMJeOhho=
+			Gs24VZFuFau7vPXUy6W006F4xX7KXDa4CvcAGKk/zEA=
 			</data>
 		</dict>
 		<key>__preview.dylib</key>
