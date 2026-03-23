@@ -73,7 +73,7 @@ public final class BibleMemorizeStore {
                 speechRateMultiplier: snapshot.speechRateMultiplier,
                 isOpenAIEnabled: snapshot.openAIEnabled,
                 openAIAPIKey: KeychainStore.load(),
-                openAIValidationState: snapshot.openAIEnabled ? .idle : .off
+                openAIValidationState: snapshot.openAIEnabled ? snapshot.openAIValidationState : .off
             )
         } else {
             self.init(
@@ -89,7 +89,7 @@ public final class BibleMemorizeStore {
     }
 
     public var canUseOpenAI: Bool {
-        isOpenAIEnabled && openAIValidationState == .valid && !openAIAPIKey.isEmpty
+        isOpenAIEnabled && !openAIAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     public var dueCards: [MemorizationCard] {
@@ -216,10 +216,13 @@ public final class BibleMemorizeStore {
             throw OpenAIClientError.invalidAPIKey
         }
 
-        return try await openAIClient.fetchVerseText(
+        let text = try await openAIClient.fetchVerseText(
             apiKey: openAIAPIKey.trimmingCharacters(in: .whitespacesAndNewlines),
             request: request
         )
+        openAIValidationState = .valid
+        openAIStatusMessage = "API key is valid."
+        return text
     }
 
     @discardableResult
@@ -258,7 +261,8 @@ public final class BibleMemorizeStore {
                 collections: collections,
                 selectedTranslation: selectedTranslation,
                 speechRateMultiplier: speechRateMultiplier,
-                openAIEnabled: isOpenAIEnabled
+                openAIEnabled: isOpenAIEnabled,
+                openAIValidationState: openAIValidationState
             )
         )
     }

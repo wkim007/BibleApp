@@ -6,6 +6,43 @@ struct StoreSnapshot: Codable {
     var selectedTranslation: Translation
     var speechRateMultiplier: Double
     var openAIEnabled: Bool
+    var openAIValidationState: OpenAIValidationState
+
+    private enum CodingKeys: String, CodingKey {
+        case cards
+        case collections
+        case selectedTranslation
+        case speechRateMultiplier
+        case openAIEnabled
+        case openAIValidationState
+    }
+
+    init(
+        cards: [MemorizationCard],
+        collections: [MemorizationCollection],
+        selectedTranslation: Translation,
+        speechRateMultiplier: Double,
+        openAIEnabled: Bool,
+        openAIValidationState: OpenAIValidationState
+    ) {
+        self.cards = cards
+        self.collections = collections
+        self.selectedTranslation = selectedTranslation
+        self.speechRateMultiplier = speechRateMultiplier
+        self.openAIEnabled = openAIEnabled
+        self.openAIValidationState = openAIValidationState
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        cards = try container.decode([MemorizationCard].self, forKey: .cards)
+        collections = try container.decode([MemorizationCollection].self, forKey: .collections)
+        selectedTranslation = try container.decode(Translation.self, forKey: .selectedTranslation)
+        speechRateMultiplier = try container.decode(Double.self, forKey: .speechRateMultiplier)
+        openAIEnabled = try container.decode(Bool.self, forKey: .openAIEnabled)
+        openAIValidationState = try container.decodeIfPresent(OpenAIValidationState.self, forKey: .openAIValidationState)
+            ?? (openAIEnabled ? .idle : .off)
+    }
 }
 
 enum StorePersistence {

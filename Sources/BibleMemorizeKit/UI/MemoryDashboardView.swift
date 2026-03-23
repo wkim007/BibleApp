@@ -236,21 +236,9 @@ private struct AddVerseView: View {
     @State private var verseText = ""
     @State private var tagsText = ""
     @State private var difficulty: VerseDifficulty = .medium
-    @State private var isFetchingVerseText = false
-    @State private var aiLookupMessage: String?
 
     private var isValid: Bool {
         !verseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private var aiLookupSignature: String {
-        [
-            selectedTranslation.rawValue,
-            selectedBook.rawValue,
-            String(selectedChapter),
-            String(selectedVerseStart),
-            selectedVerseEndEnabled ? String(selectedVerseEnd) : ""
-        ].joined(separator: "|")
     }
 
     private var availableChapters: [Int] {
@@ -292,11 +280,6 @@ private struct AddVerseView: View {
                         }
                     }
                     .pickerStyle(.menu)
-                    .onChange(of: selectedVerseStart) { _, newValue in
-                        if selectedVerseEnd < newValue {
-                            selectedVerseEnd = newValue
-                        }
-                    }
 
                     Toggle("Use Verse End", isOn: $selectedVerseEndEnabled)
 
@@ -321,24 +304,9 @@ private struct AddVerseView: View {
 
                     TextField("Verse Text", text: $verseText, axis: .vertical)
                         .lineLimit(5...10)
-
-                    if store.canUseOpenAI {
-                        if isFetchingVerseText {
-                            SwiftUI.ProgressView()
-                        }
-
-                        if let aiLookupMessage {
-                            Text(aiLookupMessage)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
                 }
             }
             .navigationTitle("Add Verse")
-            .task(id: aiLookupSignature) {
-                await fetchVerseTextIfNeeded()
-            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") {
@@ -363,6 +331,11 @@ private struct AddVerseView: View {
         }
         .onChange(of: selectedChapter) { _, _ in
             normalizeReferenceSelection()
+        }
+        .onChange(of: selectedVerseStart) { _, newValue in
+            if selectedVerseEnd < newValue {
+                selectedVerseEnd = newValue
+            }
         }
         .onChange(of: selectedVerseEndEnabled) { _, isEnabled in
             if isEnabled {
@@ -410,31 +383,6 @@ private struct AddVerseView: View {
         )
 
         dismiss()
-    }
-
-    private func fetchVerseTextIfNeeded() async {
-        guard store.canUseOpenAI else { return }
-
-        isFetchingVerseText = true
-        aiLookupMessage = "Fetching verse text with OpenAI..."
-
-        do {
-            let text = try await store.fetchVerseTextWithAI(
-                request: VerseLookupRequest(
-                    translation: selectedTranslation,
-                    book: selectedBook.rawValue,
-                    chapter: selectedChapter,
-                    verseStart: selectedVerseStart,
-                    verseEnd: selectedVerseEndEnabled ? selectedVerseEnd : nil
-                )
-            )
-            verseText = text
-            aiLookupMessage = "Verse text loaded. You can still edit it."
-        } catch {
-            aiLookupMessage = "Could not load verse text automatically."
-        }
-
-        isFetchingVerseText = false
     }
 }
 

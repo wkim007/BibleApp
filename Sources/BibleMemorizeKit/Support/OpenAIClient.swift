@@ -65,6 +65,32 @@ public struct OpenAIClient {
     }
 
     func fetchVerseText(apiKey: String, request lookup: VerseLookupRequest) async throws -> String {
+        do {
+            return try await fetchVerseText(
+                apiKey: apiKey,
+                request: lookup,
+                allowParaphraseFallback: false
+            )
+        } catch OpenAIClientError.noOutput {
+            return try await fetchVerseText(
+                apiKey: apiKey,
+                request: lookup,
+                allowParaphraseFallback: true
+            )
+        } catch OpenAIClientError.invalidResponse {
+            return try await fetchVerseText(
+                apiKey: apiKey,
+                request: lookup,
+                allowParaphraseFallback: true
+            )
+        }
+    }
+
+    private func fetchVerseText(
+        apiKey: String,
+        request lookup: VerseLookupRequest,
+        allowParaphraseFallback: Bool
+    ) async throws -> String {
         var request = URLRequest(url: URL(string: "https://api.openai.com/v1/responses")!)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -77,9 +103,43 @@ public struct OpenAIClient {
             versePart = "\(lookup.verseStart)"
         }
 
+        let prompt: String
+        if allowParaphraseFallback {
+            prompt = """
+            Return a JSON object with one field named verse_text.
+            Find the Bible verse for \(lookup.translation.rawValue) \(lookup.book) \(lookup.chapter):\(versePart).
+            If exact copyrighted wording is not available, return a faithful translation or paraphrase in the requested language instead.
+            Do not include the reference, notes, quotes, markdown, or any extra fields.
+            """
+        } else {
+            prompt = """
+            Return a JSON object with one field named verse_text.
+            Provide the Bible verse text for \(lookup.translation.rawValue) \(lookup.book) \(lookup.chapter):\(versePart).
+            Do not include the reference, notes, quotes, markdown, or any extra fields.
+            """
+        }
+
         let payload = ResponsesRequest(
             model: "gpt-5-mini",
-            input: "Return only the exact verse text for \(lookup.translation.rawValue) \(lookup.book) \(lookup.chapter):\(versePart). Do not include the reference, explanation, quotes, headings, markdown, or any extra text."
+            input: prompt,
+            text: ResponseTextConfiguration(
+                format: .jsonSchema(
+                    JSONSchemaFormat(
+                        name: "verse_lookup",
+                        schema: [
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": [
+                                "verse_text": [
+                                    "type": "string"
+                                ]
+                            ],
+                            "required": ["verse_text"]
+                        ],
+                        strict: true
+                    )
+                )
+            )
         )
 
         request.httpBody = try JSONEncoder().encode(payload)
@@ -99,6 +159,28 @@ public struct OpenAIClient {
         }
 
         let decoded = try JSONDecoder().decode(ResponsesResponse.self, from: data)
+
+        if let jsonText = decoded.output
+            .flatMap(\.content)
+            .first(where: { $0.type == "output_text" })?.text?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           let verseText = extractVerseText(from: jsonText) {
+            return verseText
+        }
+
+        if let text = decoded.outputText?.trimmingCharacters(in: .whitespacesAndNewlines),
+           let verseText = extractVerseText(from: text) {
+            return verseText
+        }
+
+        if let refusal = decoded.output
+            .flatMap(\.content)
+            .first(where: { $0.type == "refusal" })?.refusal?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !refusal.isEmpty {
+            throw OpenAIClientError.noOutput
+        }
+
         if let text = decoded.output
             .flatMap(\.content)
             .first(where: { $0.type == "output_text" })?.text?
@@ -109,15 +191,35 @@ public struct OpenAIClient {
 
         throw OpenAIClientError.noOutput
     }
+
+    private func extractVerseText(from text: String) -> String? {
+        if let data = text.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode(VerseLookupResult.self, from: data) {
+            let trimmed = decoded.verseText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                return trimmed
+            }
+        }
+
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
 }
 
 private struct ResponsesRequest: Codable {
     let model: String
     let input: String
+    let text: ResponseTextConfiguration?
 }
 
 private struct ResponsesResponse: Codable {
     let output: [ResponsesOutputItem]
+    let outputText: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case output
+        case outputText = "output_text"
+    }
 }
 
 private struct ResponsesOutputItem: Codable {
@@ -127,4 +229,114 @@ private struct ResponsesOutputItem: Codable {
 private struct ResponsesContentItem: Codable {
     let type: String
     let text: String?
+    let refusal: String?
+}
+
+private struct ResponseTextConfiguration: Codable {
+    let format: ResponseFormat
+}
+
+private enum ResponseFormat: Codable {
+    case jsonSchema(JSONSchemaFormat)
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case name
+        case schema
+        case strict
+    }
+
+    func encode(to encoder: Encoder) throws {
+        switch self {
+        case .jsonSchema(let format):
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode("json_schema", forKey: .type)
+            try container.encode(format.name, forKey: .name)
+            try container.encode(format.schema, forKey: .schema)
+            try container.encode(format.strict, forKey: .strict)
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(String.self, forKey: .type)
+        guard type == "json_schema" else {
+            throw DecodingError.dataCorruptedError(forKey: .type, in: container, debugDescription: "Unsupported response format type")
+        }
+        self = .jsonSchema(
+            JSONSchemaFormat(
+                name: try container.decode(String.self, forKey: .name),
+                schema: try container.decode([String: JSONValue].self, forKey: .schema),
+                strict: try container.decode(Bool.self, forKey: .strict)
+            )
+        )
+    }
+}
+
+private struct JSONSchemaFormat {
+    let name: String
+    let schema: [String: JSONValue]
+    let strict: Bool
+}
+
+private struct VerseLookupResult: Codable {
+    let verseText: String
+
+    private enum CodingKeys: String, CodingKey {
+        case verseText = "verse_text"
+    }
+}
+
+private enum JSONValue: Codable, ExpressibleByStringLiteral, ExpressibleByBooleanLiteral, ExpressibleByDictionaryLiteral, ExpressibleByArrayLiteral {
+    case string(String)
+    case bool(Bool)
+    case object([String: JSONValue])
+    case array([JSONValue])
+
+    init(stringLiteral value: String) {
+        self = .string(value)
+    }
+
+    init(booleanLiteral value: Bool) {
+        self = .bool(value)
+    }
+
+    init(dictionaryLiteral elements: (String, JSONValue)...) {
+        self = .object(Dictionary(uniqueKeysWithValues: elements))
+    }
+
+    init(arrayLiteral elements: JSONValue...) {
+        self = .array(elements)
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+
+        if let value = try? container.decode(String.self) {
+            self = .string(value)
+        } else if let value = try? container.decode(Bool.self) {
+            self = .bool(value)
+        } else if let value = try? container.decode([String: JSONValue].self) {
+            self = .object(value)
+        } else if let value = try? container.decode([JSONValue].self) {
+            self = .array(value)
+        } else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Unsupported JSON value")
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+
+        switch self {
+        case .string(let value):
+            try container.encode(value)
+        case .bool(let value):
+            try container.encode(value)
+        case .object(let value):
+            try container.encode(value)
+        case .array(let value):
+            try container.encode(value)
+        }
+    }
 }
