@@ -45,7 +45,7 @@ public final class BibleMemorizeStore {
         cards: [MemorizationCard],
         collections: [MemorizationCollection],
         selectedTranslation: Translation = .nkjv,
-        speechRateMultiplier: Double = 1.0,
+        speechRateMultiplier: Double = 0.9,
         isOpenAIEnabled: Bool = false,
         openAIAPIKey: String = "",
         openAIValidationState: OpenAIValidationState = .off,
@@ -80,7 +80,7 @@ public final class BibleMemorizeStore {
                 cards: SampleData.seedCards,
                 collections: SampleData.seedCollections,
                 selectedTranslation: .nkjv,
-                speechRateMultiplier: 1.0,
+                speechRateMultiplier: 0.9,
                 isOpenAIEnabled: false,
                 openAIAPIKey: KeychainStore.load(),
                 openAIValidationState: .off

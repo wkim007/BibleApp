@@ -254,11 +254,12 @@ private struct AddVerseView: View {
     }
 
     private var availableChapters: [Int] {
-        Array(1...150)
+        Array(1...selectedBook.chapterCount)
     }
 
     private var availableVerses: [Int] {
-        Array(1...176)
+        let maxVerse = selectedBook.verseCount(in: selectedChapter) ?? 1
+        return Array(1...maxVerse)
     }
 
     var body: some View {
@@ -355,6 +356,37 @@ private struct AddVerseView: View {
         }
         .onAppear {
             selectedTranslation = store.selectedTranslation
+            normalizeReferenceSelection()
+        }
+        .onChange(of: selectedBook) { _, _ in
+            normalizeReferenceSelection()
+        }
+        .onChange(of: selectedChapter) { _, _ in
+            normalizeReferenceSelection()
+        }
+        .onChange(of: selectedVerseEndEnabled) { _, isEnabled in
+            if isEnabled {
+                selectedVerseEnd = max(selectedVerseEnd, selectedVerseStart)
+                normalizeReferenceSelection()
+            }
+        }
+    }
+
+    private func normalizeReferenceSelection() {
+        let clampedChapter = min(max(selectedChapter, 1), selectedBook.chapterCount)
+        if clampedChapter != selectedChapter {
+            selectedChapter = clampedChapter
+        }
+
+        let maxVerse = selectedBook.verseCount(in: selectedChapter) ?? 1
+        let clampedVerseStart = min(max(selectedVerseStart, 1), maxVerse)
+        if clampedVerseStart != selectedVerseStart {
+            selectedVerseStart = clampedVerseStart
+        }
+
+        let clampedVerseEnd = min(max(selectedVerseEnd, selectedVerseStart), maxVerse)
+        if clampedVerseEnd != selectedVerseEnd {
+            selectedVerseEnd = clampedVerseEnd
         }
     }
 
@@ -439,11 +471,31 @@ private struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    Slider(
-                        value: $store.speechRateMultiplier,
-                        in: 0.1...2.0,
-                        step: 0.1
-                    )
+                    HStack(spacing: 12) {
+                        Button {
+                            adjustSpeechRate(by: -0.1)
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                                .font(.title3)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(store.speechRateMultiplier <= 0.1)
+
+                        Slider(
+                            value: $store.speechRateMultiplier,
+                            in: 0.1...2.0,
+                            step: 0.1
+                        )
+
+                        Button {
+                            adjustSpeechRate(by: 0.1)
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.title3)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(store.speechRateMultiplier >= 2.0)
+                    }
 
                     HStack {
                         Text("0.1x")
@@ -487,6 +539,18 @@ private struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
+    }
+
+    private func adjustSpeechRate(by delta: Double) {
+        let nextValue = (store.speechRateMultiplier + delta).rounded(toPlaces: 1)
+        store.speechRateMultiplier = min(max(nextValue, 0.1), 2.0)
+    }
+}
+
+private extension Double {
+    func rounded(toPlaces places: Int) -> Double {
+        let factor = pow(10.0, Double(places))
+        return (self * factor).rounded() / factor
     }
 }
 
