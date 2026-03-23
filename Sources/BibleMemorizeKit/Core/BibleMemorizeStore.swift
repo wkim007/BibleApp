@@ -82,6 +82,22 @@ public final class BibleMemorizeStore {
         cards.insert(MemorizationCard(verse: verse), at: 0)
     }
 
+    public func deleteVerse(cardID: UUID) {
+        cards.removeAll { $0.id == cardID }
+
+        if let session = todaysSession {
+            let remainingCards = session.prompts.compactMap { prompt in
+                cards.first(where: { $0.id == prompt.cardID })
+            }
+
+            if remainingCards.isEmpty {
+                todaysSession = nil
+            } else {
+                todaysSession = MemorizationSession(cards: remainingCards, translation: selectedTranslation)
+            }
+        }
+    }
+
     public func startSession(limit: Int = 10) {
         let sessionCards = Array(dueCards.prefix(limit))
         guard !sessionCards.isEmpty else {

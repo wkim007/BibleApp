@@ -19,14 +19,17 @@ public struct MemoryDashboardView: View {
     public var body: some View {
         TabView {
             NavigationStack {
-                ScrollView {
+                List {
                     VStack(alignment: .leading, spacing: 20) {
                         statsSection
-                        dueSection
-                        upcomingSection
                     }
-                    .padding(20)
+                    .listRowInsets(EdgeInsets(top: 20, leading: 20, bottom: 12, trailing: 20))
+                    .listRowBackground(Color.clear)
+
+                    dueSection
+                    upcomingSection
                 }
+                .listStyle(.plain)
                 .navigationTitle("Bible Memorize")
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -122,10 +125,7 @@ public struct MemoryDashboardView: View {
     }
 
     private var dueSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Due Now")
-                .font(.headline)
-
+        Section {
             ForEach(viewModel.store.dueCards) { card in
                 VerseRow(
                     card: card,
@@ -133,15 +133,24 @@ public struct MemoryDashboardView: View {
                     speaker: speaker,
                     speedMultiplier: viewModel.store.speechRateMultiplier
                 )
+                .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                .listRowBackground(Color.clear)
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button(role: .destructive) {
+                        viewModel.store.deleteVerse(cardID: card.id)
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
             }
+        } header: {
+            Text("Due Now")
+                .font(.headline)
         }
     }
 
     private var upcomingSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Upcoming")
-                .font(.headline)
-
+        Section {
             ForEach(viewModel.store.upcomingCards) { card in
                 VerseRow(
                     card: card,
@@ -149,7 +158,19 @@ public struct MemoryDashboardView: View {
                     speaker: speaker,
                     speedMultiplier: viewModel.store.speechRateMultiplier
                 )
+                .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                .listRowBackground(Color.clear)
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button(role: .destructive) {
+                        viewModel.store.deleteVerse(cardID: card.id)
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
             }
+        } header: {
+            Text("Upcoming")
+                .font(.headline)
         }
     }
 
