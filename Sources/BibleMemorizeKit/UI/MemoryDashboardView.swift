@@ -33,6 +33,13 @@ public struct MemoryDashboardView: View {
             }
 
             NavigationStack {
+                ProgressView(store: viewModel.store)
+            }
+            .tabItem {
+                Label("Progress", systemImage: "chart.bar.xaxis")
+            }
+
+            NavigationStack {
                 SettingsView(store: viewModel.store)
             }
             .tabItem {
@@ -53,8 +60,8 @@ public struct MemoryDashboardView: View {
                 StatCard(title: "Progress", value: "\(Int(viewModel.reviewCompletion * 100))%")
             }
 
-            Button("Start Review Session") {
-                viewModel.store.startSession()
+            Button(viewModel.store.todaysSession == nil ? "Start Review Session" : "Hide Review Session") {
+                viewModel.store.toggleSession()
             }
             .buttonStyle(.borderedProminent)
 
@@ -70,6 +77,28 @@ public struct MemoryDashboardView: View {
                     }
                     Text(prompt.maskedWords.joined(separator: " "))
                         .foregroundStyle(.secondary)
+
+                    HStack {
+                        Button {
+                            viewModel.store.moveToPreviousSessionPrompt()
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.subheadline.bold())
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(!(viewModel.store.todaysSession?.canMoveToPreviousPrompt ?? false))
+
+                        Spacer()
+
+                        Button {
+                            viewModel.store.moveToNextSessionPrompt()
+                        } label: {
+                            Image(systemName: "chevron.right")
+                                .font(.subheadline.bold())
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(!(viewModel.store.todaysSession?.canMoveToNextPrompt ?? false))
+                    }
                 }
                 .padding()
                 .frame(maxWidth: .infinity, alignment: .leading)

@@ -1,9 +1,21 @@
 import Foundation
 
 public enum SampleData {
+    private static let joshuaVerseID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
+    private static let romansVerseID = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
+    private static let psalmVerseID = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!
+
+    private static func dayOffset(_ days: Int, hour: Int = 9) -> Date {
+        let calendar = Calendar.current
+        let base = calendar.startOfDay(for: .now)
+        let day = calendar.date(byAdding: .day, value: days, to: base) ?? .now
+        return calendar.date(byAdding: .hour, value: hour, to: day) ?? day
+    }
+
     public static let seedCards: [MemorizationCard] = [
         MemorizationCard(
             verse: MemoryVerse(
+                id: joshuaVerseID,
                 reference: BibleReference(book: "Joshua", chapter: 1, verseStart: 9),
                 defaultTranslation: .nkjv,
                 textsByTranslation: [
@@ -21,10 +33,18 @@ public enum SampleData {
             nextReviewDate: .now.addingTimeInterval(-3600),
             intervalDays: 1,
             easeFactor: 2.5,
-            consecutiveSuccesses: 1
+            consecutiveSuccesses: 1,
+            lapses: 1,
+            lastReviewedAt: dayOffset(-1, hour: 20),
+            reviewHistory: [
+                ReviewRecord(verseID: joshuaVerseID, reviewedAt: dayOffset(-5), grade: .difficult, elapsedSeconds: 28),
+                ReviewRecord(verseID: joshuaVerseID, reviewedAt: dayOffset(-3), grade: .hesitant, elapsedSeconds: 23),
+                ReviewRecord(verseID: joshuaVerseID, reviewedAt: dayOffset(-1, hour: 20), grade: .correct, elapsedSeconds: 18)
+            ]
         ),
         MemorizationCard(
             verse: MemoryVerse(
+                id: romansVerseID,
                 reference: BibleReference(book: "Romans", chapter: 12, verseStart: 2),
                 defaultTranslation: .nkjv,
                 textsByTranslation: [
@@ -42,10 +62,18 @@ public enum SampleData {
             nextReviewDate: .now.addingTimeInterval(-7200),
             intervalDays: 3,
             easeFactor: 2.3,
-            consecutiveSuccesses: 2
+            consecutiveSuccesses: 2,
+            lastReviewedAt: dayOffset(0, hour: 7),
+            reviewHistory: [
+                ReviewRecord(verseID: romansVerseID, reviewedAt: dayOffset(-6), grade: .hesitant, elapsedSeconds: 26),
+                ReviewRecord(verseID: romansVerseID, reviewedAt: dayOffset(-4), grade: .correct, elapsedSeconds: 20),
+                ReviewRecord(verseID: romansVerseID, reviewedAt: dayOffset(-2), grade: .correct, elapsedSeconds: 17),
+                ReviewRecord(verseID: romansVerseID, reviewedAt: dayOffset(0, hour: 7), grade: .effortless, elapsedSeconds: 12)
+            ]
         ),
         MemorizationCard(
             verse: MemoryVerse(
+                id: psalmVerseID,
                 reference: BibleReference(book: "Psalm", chapter: 119, verseStart: 11),
                 defaultTranslation: .nkjv,
                 textsByTranslation: [
@@ -63,7 +91,15 @@ public enum SampleData {
             nextReviewDate: .now.addingTimeInterval(86400),
             intervalDays: 7,
             easeFactor: 2.7,
-            consecutiveSuccesses: 4
+            consecutiveSuccesses: 4,
+            lastReviewedAt: dayOffset(0, hour: 6),
+            reviewHistory: [
+                ReviewRecord(verseID: psalmVerseID, reviewedAt: dayOffset(-6, hour: 18), grade: .correct, elapsedSeconds: 19),
+                ReviewRecord(verseID: psalmVerseID, reviewedAt: dayOffset(-5, hour: 19), grade: .correct, elapsedSeconds: 17),
+                ReviewRecord(verseID: psalmVerseID, reviewedAt: dayOffset(-4, hour: 19), grade: .effortless, elapsedSeconds: 13),
+                ReviewRecord(verseID: psalmVerseID, reviewedAt: dayOffset(-3, hour: 19), grade: .effortless, elapsedSeconds: 11),
+                ReviewRecord(verseID: psalmVerseID, reviewedAt: dayOffset(0, hour: 6), grade: .effortless, elapsedSeconds: 10)
+            ]
         )
     ]
 

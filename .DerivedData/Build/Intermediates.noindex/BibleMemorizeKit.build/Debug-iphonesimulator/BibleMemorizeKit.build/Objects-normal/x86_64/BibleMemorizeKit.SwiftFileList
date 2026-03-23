@@ -1,7 +1,9 @@
 /Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Core/BibleMemorizeStore.swift
 /Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Core/MemorizationScheduler.swift
 /Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Core/MemorizationSession.swift
+/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Core/ProgressAnalytics.swift
 /Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Models/MemorizationModels.swift
 /Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/Support/SampleData.swift
 /Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/UI/DashboardViewModel.swift
 /Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/UI/MemoryDashboardView.swift
+/Users/MacBook/Desktop/AI_Project/BibleApp/Sources/BibleMemorizeKit/UI/ProgressView.swift

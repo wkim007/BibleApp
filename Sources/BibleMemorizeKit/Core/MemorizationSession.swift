@@ -59,9 +59,27 @@ public struct MemorizationSession: Sendable {
         currentIndex >= prompts.count
     }
 
+    public var canMoveToPreviousPrompt: Bool {
+        currentIndex > 0 && !prompts.isEmpty
+    }
+
+    public var canMoveToNextPrompt: Bool {
+        currentIndex < prompts.count - 1
+    }
+
     public mutating func record(grade: RecallGrade) {
         guard !isComplete else { return }
         grades.append(grade)
+        currentIndex += 1
+    }
+
+    public mutating func moveToPreviousPrompt() {
+        guard canMoveToPreviousPrompt else { return }
+        currentIndex -= 1
+    }
+
+    public mutating func moveToNextPrompt() {
+        guard canMoveToNextPrompt else { return }
         currentIndex += 1
     }
 

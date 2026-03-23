@@ -67,7 +67,31 @@ public final class BibleMemorizeStore {
 
     public func startSession(limit: Int = 10) {
         let sessionCards = Array(dueCards.prefix(limit))
+        guard !sessionCards.isEmpty else {
+            todaysSession = nil
+            return
+        }
         todaysSession = MemorizationSession(cards: sessionCards, translation: selectedTranslation)
+    }
+
+    public func toggleSession(limit: Int = 10) {
+        if todaysSession == nil {
+            startSession(limit: limit)
+        } else {
+            todaysSession = nil
+        }
+    }
+
+    public func moveToPreviousSessionPrompt() {
+        guard var session = todaysSession else { return }
+        session.moveToPreviousPrompt()
+        todaysSession = session
+    }
+
+    public func moveToNextSessionPrompt() {
+        guard var session = todaysSession else { return }
+        session.moveToNextPrompt()
+        todaysSession = session
     }
 
     public func updateSelectedTranslation(_ translation: Translation) {
