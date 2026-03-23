@@ -11,6 +11,7 @@ public struct MemoryDashboardView: View {
     @State private var isShowingAddVerse = false
     @State private var editingCard: MemorizationCard?
     @State private var editingVerseText = ""
+    @State private var editingVerseTranslation: Translation = .nkjv
     @State private var editingAssignmentType: VerseAssignmentType = .dueNow
     @State private var highlightedMicPromptID: UUID?
     @State private var isMicPulseExpanded = false
@@ -75,8 +76,8 @@ public struct MemoryDashboardView: View {
                 }
                 .sheet(item: $editingCard) { card in
                     EditVerseView(
-                        title: card.verse.reference.formatted(for: viewModel.store.selectedTranslation),
-                        translation: viewModel.store.selectedTranslation,
+                        reference: card.verse.reference,
+                        translation: $editingVerseTranslation,
                         verseText: $editingVerseText,
                         assignmentType: $editingAssignmentType
                     ) {
@@ -105,6 +106,10 @@ public struct MemoryDashboardView: View {
         .preferredColorScheme(.dark)
         .onAppear {
             isMicPulseExpanded = true
+            UIApplication.shared.isIdleTimerDisabled = viewModel.store.keepScreenAwake
+        }
+        .onChange(of: viewModel.store.keepScreenAwake) { _, keepAwake in
+            UIApplication.shared.isIdleTimerDisabled = keepAwake
         }
     }
 
@@ -465,16 +470,26 @@ public struct MemoryDashboardView: View {
     }
 
     private func beginEditing(_ card: MemorizationCard) {
-        editingVerseText = card.verse.text(for: viewModel.store.selectedTranslation)
+        editingVerseText = card.verse.text(for: card.verse.defaultTranslation)
+        editingVerseTranslation = card.verse.defaultTranslation
         editingAssignmentType = viewModel.store.assignmentType(for: card.id)
         editingCard = card
     }
 
     private func saveEditedVerse(cardID: UUID) {
+        let trimmedText = editingVerseText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let previousTranslation = viewModel.store.cards.first(where: { $0.id == cardID })?.verse.defaultTranslation ?? editingVerseTranslation
+
         viewModel.store.updateVerseText(
             cardID: cardID,
-            translation: viewModel.store.selectedTranslation,
-            text: editingVerseText.trimmingCharacters(in: .whitespacesAndNewlines)
+            translation: editingVerseTranslation,
+            text: trimmedText
+        )
+        viewModel.store.updateVerseBibleVersion(
+            cardID: cardID,
+            from: previousTranslation,
+            to: editingVerseTranslation,
+            text: trimmedText
         )
         viewModel.store.updateAssignmentType(cardID: cardID, assignmentType: editingAssignmentType)
         editingCard = nil
@@ -565,7 +580,7 @@ private struct AddVerseView: View {
         NavigationStack {
             Form {
                 Section("Reference") {
-                    Picker("Translation", selection: $selectedTranslation) {
+                    Picker("Bible Version", selection: $selectedTranslation) {
                         ForEach(Translation.allCases) { translation in
                             Text(translation.rawValue).tag(translation)
                         }
@@ -790,6 +805,14 @@ private struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Display") {
+                Toggle("Keep Screen Awake", isOn: $store.keepScreenAwake)
+
+                Text("When enabled, the screen stays on while this app is open.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("AI (OpenAI) Mode") {
                 Toggle("Enable AI Mode", isOn: Binding(
                     get: { store.isOpenAIEnabled },
@@ -874,8 +897,8 @@ private struct StatCard: View {
 private struct EditVerseView: View {
     @Environment(\.dismiss) private var dismiss
 
-    let title: String
-    let translation: Translation
+    let reference: BibleReference
+    @Binding var translation: Translation
     @Binding var verseText: String
     @Binding var assignmentType: VerseAssignmentType
     let onSave: () -> Void
@@ -889,11 +912,13 @@ private struct EditVerseView: View {
             Form {
                 Section("Reference") {
                     LabeledContent("Verse") {
-                        Text(title)
+                        Text(reference.formatted(for: translation))
                     }
 
-                    LabeledContent("Translation") {
-                        Text(translation.rawValue)
+                    Picker("Bible Version", selection: $translation) {
+                        ForEach(Translation.allCases) { version in
+                            Text(version.rawValue).tag(version)
+                        }
                     }
                 }
 

@@ -20,6 +20,9 @@ public final class BibleMemorizeStore {
     public var speechRateMultiplier: Double {
         didSet { persistState() }
     }
+    public var keepScreenAwake: Bool {
+        didSet { persistState() }
+    }
     public var isOpenAIEnabled: Bool {
         didSet {
             if !isOpenAIEnabled {
@@ -50,6 +53,7 @@ public final class BibleMemorizeStore {
         passedPromptIDs: Set<UUID> = [],
         selectedTranslation: Translation = .nkjv,
         speechRateMultiplier: Double = 0.9,
+        keepScreenAwake: Bool = false,
         isOpenAIEnabled: Bool = false,
         openAIAPIKey: String = "",
         openAIValidationState: OpenAIValidationState = .off,
@@ -61,6 +65,7 @@ public final class BibleMemorizeStore {
         self.passedPromptIDs = passedPromptIDs
         self.selectedTranslation = selectedTranslation
         self.speechRateMultiplier = speechRateMultiplier
+        self.keepScreenAwake = keepScreenAwake
         self.isOpenAIEnabled = isOpenAIEnabled
         self.openAIAPIKey = openAIAPIKey
         self.openAIValidationState = openAIValidationState
@@ -77,6 +82,7 @@ public final class BibleMemorizeStore {
                 passedPromptIDs: snapshot.passedPromptIDs,
                 selectedTranslation: snapshot.selectedTranslation,
                 speechRateMultiplier: snapshot.speechRateMultiplier,
+                keepScreenAwake: snapshot.keepScreenAwake,
                 isOpenAIEnabled: snapshot.openAIEnabled,
                 openAIAPIKey: KeychainStore.load(),
                 openAIValidationState: snapshot.openAIEnabled ? snapshot.openAIValidationState : .off
@@ -88,6 +94,7 @@ public final class BibleMemorizeStore {
                 passedPromptIDs: [],
                 selectedTranslation: .nkjv,
                 speechRateMultiplier: 0.9,
+                keepScreenAwake: false,
                 isOpenAIEnabled: false,
                 openAIAPIKey: KeychainStore.load(),
                 openAIValidationState: .off
@@ -101,7 +108,7 @@ public final class BibleMemorizeStore {
 
     public var dueCards: [MemorizationCard] {
         cards
-            .filter { $0.nextReviewDate <= .now }
+            .filter { $0.nextReviewDate <= .now && $0.verse.defaultTranslation == selectedTranslation }
             .sorted { lhs, rhs in
                 if lhs.sortOrder == rhs.sortOrder {
                     return lhs.nextReviewDate < rhs.nextReviewDate
@@ -112,7 +119,7 @@ public final class BibleMemorizeStore {
 
     public var upcomingCards: [MemorizationCard] {
         cards
-            .filter { $0.nextReviewDate > .now }
+            .filter { $0.nextReviewDate > .now && $0.verse.defaultTranslation == selectedTranslation }
             .sorted { lhs, rhs in
                 if lhs.nextReviewDate == rhs.nextReviewDate {
                     return lhs.sortOrder < rhs.sortOrder
@@ -154,6 +161,20 @@ public final class BibleMemorizeStore {
     public func updateVerseText(cardID: UUID, translation: Translation, text: String) {
         guard let index = cards.firstIndex(where: { $0.id == cardID }) else { return }
         cards[index].verse.textsByTranslation[translation] = text
+    }
+
+    public func updateVerseBibleVersion(cardID: UUID, from oldTranslation: Translation, to newTranslation: Translation, text: String) {
+        guard let index = cards.firstIndex(where: { $0.id == cardID }) else { return }
+
+        cards[index].verse.defaultTranslation = newTranslation
+        cards[index].verse.textsByTranslation[newTranslation] = text
+
+        if oldTranslation != newTranslation,
+           cards[index].verse.textsByTranslation[oldTranslation] == text {
+            cards[index].verse.textsByTranslation.removeValue(forKey: oldTranslation)
+        }
+
+        rebuildSessionAfterCardStateChange()
     }
 
     public func updateAssignmentType(cardID: UUID, assignmentType: VerseAssignmentType) {
@@ -286,11 +307,15 @@ public final class BibleMemorizeStore {
 
     public func updateSelectedTranslation(_ translation: Translation) {
         selectedTranslation = translation
-        if let session = todaysSession {
-            let remainingCards = session.prompts.compactMap { prompt in
-                cards.first(where: { $0.id == prompt.cardID })
+        let remainingCards = dueCards
+        if remainingCards.isEmpty {
+            todaysSession = nil
+        } else {
+            var refreshedSession = MemorizationSession(cards: remainingCards, translation: translation)
+            for card in remainingCards where passedPromptIDs.contains(card.id) {
+                refreshedSession.markPassed(cardID: card.id)
             }
-            todaysSession = MemorizationSession(cards: remainingCards, translation: translation)
+            todaysSession = refreshedSession
         }
     }
 
@@ -379,6 +404,7 @@ public final class BibleMemorizeStore {
                 passedPromptIDs: passedPromptIDs,
                 selectedTranslation: selectedTranslation,
                 speechRateMultiplier: speechRateMultiplier,
+                keepScreenAwake: keepScreenAwake,
                 openAIEnabled: isOpenAIEnabled,
                 openAIValidationState: openAIValidationState
             )

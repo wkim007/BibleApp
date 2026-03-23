@@ -6,6 +6,7 @@ struct StoreSnapshot: Codable {
     var passedPromptIDs: Set<UUID>
     var selectedTranslation: Translation
     var speechRateMultiplier: Double
+    var keepScreenAwake: Bool
     var openAIEnabled: Bool
     var openAIValidationState: OpenAIValidationState
 
@@ -15,6 +16,7 @@ struct StoreSnapshot: Codable {
         case passedPromptIDs
         case selectedTranslation
         case speechRateMultiplier
+        case keepScreenAwake
         case openAIEnabled
         case openAIValidationState
     }
@@ -25,6 +27,7 @@ struct StoreSnapshot: Codable {
         passedPromptIDs: Set<UUID>,
         selectedTranslation: Translation,
         speechRateMultiplier: Double,
+        keepScreenAwake: Bool,
         openAIEnabled: Bool,
         openAIValidationState: OpenAIValidationState
     ) {
@@ -33,6 +36,7 @@ struct StoreSnapshot: Codable {
         self.passedPromptIDs = passedPromptIDs
         self.selectedTranslation = selectedTranslation
         self.speechRateMultiplier = speechRateMultiplier
+        self.keepScreenAwake = keepScreenAwake
         self.openAIEnabled = openAIEnabled
         self.openAIValidationState = openAIValidationState
     }
@@ -44,6 +48,7 @@ struct StoreSnapshot: Codable {
         passedPromptIDs = try container.decodeIfPresent(Set<UUID>.self, forKey: .passedPromptIDs) ?? []
         selectedTranslation = try container.decode(Translation.self, forKey: .selectedTranslation)
         speechRateMultiplier = try container.decode(Double.self, forKey: .speechRateMultiplier)
+        keepScreenAwake = try container.decodeIfPresent(Bool.self, forKey: .keepScreenAwake) ?? false
         openAIEnabled = try container.decode(Bool.self, forKey: .openAIEnabled)
         openAIValidationState = try container.decodeIfPresent(OpenAIValidationState.self, forKey: .openAIValidationState)
             ?? (openAIEnabled ? .idle : .off)
