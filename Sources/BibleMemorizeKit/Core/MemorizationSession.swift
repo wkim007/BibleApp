@@ -41,12 +41,14 @@ public struct MemorizationSession: Sendable {
     public private(set) var prompts: [SessionPrompt]
     public private(set) var currentIndex: Int
     public private(set) var grades: [RecallGrade]
+    public private(set) var passedPromptIDs: Set<UUID>
     public private(set) var startedAt: Date
 
     public init(cards: [MemorizationCard], translation: Translation, startedAt: Date = .now) {
         self.prompts = cards.map { SessionPrompt(card: $0, translation: translation) }
         self.currentIndex = 0
         self.grades = []
+        self.passedPromptIDs = []
         self.startedAt = startedAt
     }
 
@@ -67,6 +69,10 @@ public struct MemorizationSession: Sendable {
         currentIndex < prompts.count - 1
     }
 
+    public var passedCount: Int {
+        passedPromptIDs.count
+    }
+
     public mutating func record(grade: RecallGrade) {
         guard !isComplete else { return }
         grades.append(grade)
@@ -81,6 +87,18 @@ public struct MemorizationSession: Sendable {
     public mutating func moveToNextPrompt() {
         guard canMoveToNextPrompt else { return }
         currentIndex += 1
+    }
+
+    public mutating func markPassed(cardID: UUID) {
+        passedPromptIDs.insert(cardID)
+    }
+
+    public mutating func resetPassed(cardID: UUID) {
+        passedPromptIDs.remove(cardID)
+    }
+
+    public func isPassed(cardID: UUID) -> Bool {
+        passedPromptIDs.contains(cardID)
     }
 
     public func makeSummary(finishedAt: Date = .now) -> SessionSummary {

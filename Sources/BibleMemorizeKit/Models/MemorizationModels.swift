@@ -70,6 +70,13 @@ public enum VerseDifficulty: String, Codable, CaseIterable, Identifiable, Sendab
     public var id: String { rawValue }
 }
 
+public enum VerseAssignmentType: String, Codable, CaseIterable, Identifiable, Sendable {
+    case dueNow = "Due Now"
+    case upcoming = "Upcoming"
+
+    public var id: String { rawValue }
+}
+
 public struct MemoryVerse: Identifiable, Codable, Hashable, Sendable {
     public let id: UUID
     public var reference: BibleReference
@@ -140,6 +147,7 @@ public struct MemorizationCard: Identifiable, Codable, Hashable, Sendable {
     public let id: UUID
     public var verse: MemoryVerse
     public var nextReviewDate: Date
+    public var sortOrder: Double
     public var intervalDays: Double
     public var easeFactor: Double
     public var consecutiveSuccesses: Int
@@ -151,6 +159,7 @@ public struct MemorizationCard: Identifiable, Codable, Hashable, Sendable {
         id: UUID = UUID(),
         verse: MemoryVerse,
         nextReviewDate: Date = .now,
+        sortOrder: Double = Date().timeIntervalSinceReferenceDate,
         intervalDays: Double = 0,
         easeFactor: Double = 2.5,
         consecutiveSuccesses: Int = 0,
@@ -161,12 +170,55 @@ public struct MemorizationCard: Identifiable, Codable, Hashable, Sendable {
         self.id = id
         self.verse = verse
         self.nextReviewDate = nextReviewDate
+        self.sortOrder = sortOrder
         self.intervalDays = intervalDays
         self.easeFactor = easeFactor
         self.consecutiveSuccesses = consecutiveSuccesses
         self.lapses = lapses
         self.lastReviewedAt = lastReviewedAt
         self.reviewHistory = reviewHistory
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case verse
+        case nextReviewDate
+        case sortOrder
+        case intervalDays
+        case easeFactor
+        case consecutiveSuccesses
+        case lapses
+        case lastReviewedAt
+        case reviewHistory
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        verse = try container.decode(MemoryVerse.self, forKey: .verse)
+        nextReviewDate = try container.decode(Date.self, forKey: .nextReviewDate)
+        sortOrder = try container.decodeIfPresent(Double.self, forKey: .sortOrder)
+            ?? nextReviewDate.timeIntervalSinceReferenceDate
+        intervalDays = try container.decode(Double.self, forKey: .intervalDays)
+        easeFactor = try container.decode(Double.self, forKey: .easeFactor)
+        consecutiveSuccesses = try container.decode(Int.self, forKey: .consecutiveSuccesses)
+        lapses = try container.decode(Int.self, forKey: .lapses)
+        lastReviewedAt = try container.decodeIfPresent(Date.self, forKey: .lastReviewedAt)
+        reviewHistory = try container.decode([ReviewRecord].self, forKey: .reviewHistory)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(verse, forKey: .verse)
+        try container.encode(nextReviewDate, forKey: .nextReviewDate)
+        try container.encode(sortOrder, forKey: .sortOrder)
+        try container.encode(intervalDays, forKey: .intervalDays)
+        try container.encode(easeFactor, forKey: .easeFactor)
+        try container.encode(consecutiveSuccesses, forKey: .consecutiveSuccesses)
+        try container.encode(lapses, forKey: .lapses)
+        try container.encodeIfPresent(lastReviewedAt, forKey: .lastReviewedAt)
+        try container.encode(reviewHistory, forKey: .reviewHistory)
     }
 }
 

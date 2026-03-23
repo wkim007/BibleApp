@@ -11,6 +11,9 @@ public final class BibleMemorizeStore {
         didSet { persistState() }
     }
     public private(set) var todaysSession: MemorizationSession?
+    public private(set) var passedPromptIDs: Set<UUID> {
+        didSet { persistState() }
+    }
     public var selectedTranslation: Translation {
         didSet { persistState() }
     }
@@ -44,6 +47,7 @@ public final class BibleMemorizeStore {
     public init(
         cards: [MemorizationCard],
         collections: [MemorizationCollection],
+        passedPromptIDs: Set<UUID> = [],
         selectedTranslation: Translation = .nkjv,
         speechRateMultiplier: Double = 0.9,
         isOpenAIEnabled: Bool = false,
@@ -54,6 +58,7 @@ public final class BibleMemorizeStore {
     ) {
         self.cards = cards
         self.collections = collections
+        self.passedPromptIDs = passedPromptIDs
         self.selectedTranslation = selectedTranslation
         self.speechRateMultiplier = speechRateMultiplier
         self.isOpenAIEnabled = isOpenAIEnabled
@@ -69,6 +74,7 @@ public final class BibleMemorizeStore {
             self.init(
                 cards: snapshot.cards,
                 collections: snapshot.collections,
+                passedPromptIDs: snapshot.passedPromptIDs,
                 selectedTranslation: snapshot.selectedTranslation,
                 speechRateMultiplier: snapshot.speechRateMultiplier,
                 isOpenAIEnabled: snapshot.openAIEnabled,
@@ -79,6 +85,7 @@ public final class BibleMemorizeStore {
             self.init(
                 cards: SampleData.seedCards,
                 collections: SampleData.seedCollections,
+                passedPromptIDs: [],
                 selectedTranslation: .nkjv,
                 speechRateMultiplier: 0.9,
                 isOpenAIEnabled: false,
@@ -95,13 +102,30 @@ public final class BibleMemorizeStore {
     public var dueCards: [MemorizationCard] {
         cards
             .filter { $0.nextReviewDate <= .now }
-            .sorted { $0.nextReviewDate < $1.nextReviewDate }
+            .sorted { lhs, rhs in
+                if lhs.sortOrder == rhs.sortOrder {
+                    return lhs.nextReviewDate < rhs.nextReviewDate
+                }
+                return lhs.sortOrder < rhs.sortOrder
+            }
     }
 
     public var upcomingCards: [MemorizationCard] {
         cards
             .filter { $0.nextReviewDate > .now }
-            .sorted { $0.nextReviewDate < $1.nextReviewDate }
+            .sorted { lhs, rhs in
+                if lhs.nextReviewDate == rhs.nextReviewDate {
+                    return lhs.sortOrder < rhs.sortOrder
+                }
+                return lhs.nextReviewDate < rhs.nextReviewDate
+            }
+    }
+
+    public func assignmentType(for cardID: UUID) -> VerseAssignmentType {
+        guard let card = cards.first(where: { $0.id == cardID }) else {
+            return .dueNow
+        }
+        return card.nextReviewDate > .now ? .upcoming : .dueNow
     }
 
     public func addVerse(
@@ -109,7 +133,8 @@ public final class BibleMemorizeStore {
         translation: Translation,
         text: String,
         tags: [String],
-        difficulty: VerseDifficulty
+        difficulty: VerseDifficulty,
+        assignmentType: VerseAssignmentType = .dueNow
     ) {
         let verse = MemoryVerse(
             reference: reference,
@@ -119,7 +144,24 @@ public final class BibleMemorizeStore {
             difficulty: difficulty
         )
 
-        cards.insert(MemorizationCard(verse: verse), at: 0)
+        var card = MemorizationCard(verse: verse)
+        let placement = placement(for: assignmentType, excluding: nil)
+        card.nextReviewDate = placement.nextReviewDate
+        card.sortOrder = placement.sortOrder
+        cards.insert(card, at: 0)
+    }
+
+    public func updateVerseText(cardID: UUID, translation: Translation, text: String) {
+        guard let index = cards.firstIndex(where: { $0.id == cardID }) else { return }
+        cards[index].verse.textsByTranslation[translation] = text
+    }
+
+    public func updateAssignmentType(cardID: UUID, assignmentType: VerseAssignmentType) {
+        guard let index = cards.firstIndex(where: { $0.id == cardID }) else { return }
+        let placement = placement(for: assignmentType, excluding: cardID)
+        cards[index].nextReviewDate = placement.nextReviewDate
+        cards[index].sortOrder = placement.sortOrder
+        rebuildSessionAfterCardStateChange()
     }
 
     public func deleteVerse(cardID: UUID) {
@@ -144,7 +186,11 @@ public final class BibleMemorizeStore {
             todaysSession = nil
             return
         }
-        todaysSession = MemorizationSession(cards: sessionCards, translation: selectedTranslation)
+        var session = MemorizationSession(cards: sessionCards, translation: selectedTranslation)
+        for card in sessionCards where passedPromptIDs.contains(card.id) {
+            session.markPassed(cardID: card.id)
+        }
+        todaysSession = session
     }
 
     public func toggleSession(limit: Int = 10) {
@@ -167,24 +213,70 @@ public final class BibleMemorizeStore {
         todaysSession = session
     }
 
+    public func markPromptPassed(cardID: UUID) {
+        passedPromptIDs.insert(cardID)
+        guard var session = todaysSession else { return }
+        session.markPassed(cardID: cardID)
+        todaysSession = session
+    }
+
+    public func resetPromptPassed(cardID: UUID) {
+        passedPromptIDs.remove(cardID)
+        guard var session = todaysSession else { return }
+        session.resetPassed(cardID: cardID)
+        todaysSession = session
+    }
+
+    public func isPromptPassed(_ cardID: UUID) -> Bool {
+        passedPromptIDs.contains(cardID)
+    }
+
+    public func resetAllPassedPrompts() {
+        passedPromptIDs.removeAll()
+        if var session = todaysSession {
+            for cardID in session.passedPromptIDs {
+                session.resetPassed(cardID: cardID)
+            }
+            todaysSession = session
+        }
+    }
+
     public func moveCardToUpcoming(cardID: UUID) {
         guard let index = cards.firstIndex(where: { $0.id == cardID }) else { return }
         guard cards[index].nextReviewDate <= .now else { return }
 
-        let nextUpcomingDate = max(
-            Date().addingTimeInterval(3600),
-            (upcomingCards.last?.nextReviewDate ?? .now).addingTimeInterval(3600)
-        )
-        cards[index].nextReviewDate = nextUpcomingDate
+        let placement = placement(for: .upcoming, excluding: cardID)
+        cards[index].nextReviewDate = placement.nextReviewDate
+        cards[index].sortOrder = placement.sortOrder
+        rebuildSessionAfterCardStateChange()
+    }
 
-        if let session = todaysSession {
-            let remainingCards = session.prompts.compactMap { prompt in
-                cards.first(where: { $0.id == prompt.cardID && $0.nextReviewDate <= .now })
-            }
+    public func moveCardToDueNow(cardID: UUID) {
+        guard let index = cards.firstIndex(where: { $0.id == cardID }) else { return }
+        guard cards[index].nextReviewDate > .now else { return }
 
-            todaysSession = remainingCards.isEmpty
-                ? nil
-                : MemorizationSession(cards: remainingCards, translation: selectedTranslation)
+        let placement = placement(for: .dueNow, excluding: cardID)
+        cards[index].nextReviewDate = placement.nextReviewDate
+        cards[index].sortOrder = placement.sortOrder
+        rebuildSessionAfterCardStateChange()
+    }
+
+    public func reorderDueCard(cardID: UUID, before targetCardID: UUID) {
+        let currentDue = dueCards
+        guard let sourceIndex = currentDue.firstIndex(where: { $0.id == cardID }),
+              let targetIndex = currentDue.firstIndex(where: { $0.id == targetCardID }),
+              sourceIndex != targetIndex else {
+            return
+        }
+
+        var reordered = currentDue
+        let moved = reordered.remove(at: sourceIndex)
+        let insertionIndex = targetIndex > sourceIndex ? targetIndex - 1 : targetIndex
+        reordered.insert(moved, at: insertionIndex)
+
+        for (index, card) in reordered.enumerated() {
+            guard let storedIndex = cards.firstIndex(where: { $0.id == card.id }) else { continue }
+            cards[storedIndex].sortOrder = Double(index + 1)
         }
     }
 
@@ -280,11 +372,57 @@ public final class BibleMemorizeStore {
             StoreSnapshot(
                 cards: cards,
                 collections: collections,
+                passedPromptIDs: passedPromptIDs,
                 selectedTranslation: selectedTranslation,
                 speechRateMultiplier: speechRateMultiplier,
                 openAIEnabled: isOpenAIEnabled,
                 openAIValidationState: openAIValidationState
             )
         )
+    }
+
+    private func placement(
+        for assignmentType: VerseAssignmentType,
+        excluding excludedCardID: UUID?
+    ) -> (nextReviewDate: Date, sortOrder: Double) {
+        switch assignmentType {
+        case .dueNow:
+            let earliestSortOrder = cards
+                .filter { $0.id != excludedCardID && $0.nextReviewDate <= .now }
+                .map(\.sortOrder)
+                .min() ?? 1
+            return (.now.addingTimeInterval(-1), earliestSortOrder - 1)
+        case .upcoming:
+            let latestUpcomingDate = cards
+                .filter { $0.id != excludedCardID && $0.nextReviewDate > .now }
+                .map(\.nextReviewDate)
+                .max() ?? .now
+            let latestUpcomingSortOrder = cards
+                .filter { $0.id != excludedCardID && $0.nextReviewDate > .now }
+                .map(\.sortOrder)
+                .max() ?? Double(cards.count)
+            let nextReviewDate = max(Date().addingTimeInterval(3600), latestUpcomingDate.addingTimeInterval(3600))
+            return (nextReviewDate, latestUpcomingSortOrder + 1)
+        }
+    }
+
+    private func rebuildSessionAfterCardStateChange() {
+        guard let session = todaysSession else { return }
+
+        let dueCardIDs = Set(cards.filter { $0.nextReviewDate <= .now }.map(\.id))
+        let sessionCardIDs = Set(session.prompts.map(\.cardID))
+        let combinedIDs = dueCardIDs.intersection(sessionCardIDs).union(dueCardIDs.subtracting(sessionCardIDs))
+        let refreshedCards = dueCards.filter { combinedIDs.contains($0.id) }
+
+        if refreshedCards.isEmpty {
+            todaysSession = nil
+            return
+        }
+
+        var refreshedSession = MemorizationSession(cards: refreshedCards, translation: selectedTranslation)
+        for card in refreshedCards where passedPromptIDs.contains(card.id) {
+            refreshedSession.markPassed(cardID: card.id)
+        }
+        todaysSession = refreshedSession
     }
 }

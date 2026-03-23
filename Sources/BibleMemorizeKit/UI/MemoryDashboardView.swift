@@ -1,14 +1,20 @@
 import SwiftUI
 import AVFoundation
 import Speech
-import UniformTypeIdentifiers
 
 public struct MemoryDashboardView: View {
     @State private var viewModel: DashboardViewModel
     @StateObject private var speaker = VerseSpeaker()
     @StateObject private var recitationRecognizer = VerseRecitationRecognizer()
     @State private var isShowingAddVerse = false
+    @State private var editingCard: MemorizationCard?
+    @State private var editingVerseText = ""
+    @State private var editingAssignmentType: VerseAssignmentType = .dueNow
+    @State private var highlightedMicPromptID: UUID?
+    @State private var isMicPulseExpanded = false
+    @State private var isDueDropTargeted = false
     @State private var isUpcomingDropTargeted = false
+    @State private var dueReorderTargetID: UUID?
 
     @MainActor
     public init(viewModel: DashboardViewModel) {
@@ -23,17 +29,17 @@ public struct MemoryDashboardView: View {
     public var body: some View {
         TabView {
             NavigationStack {
-                List {
+                ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         statsSection
-                    }
-                    .listRowInsets(EdgeInsets(top: 20, leading: 20, bottom: 12, trailing: 20))
-                    .listRowBackground(Color.clear)
 
-                    dueSection
-                    upcomingSection
+                        dueSection
+                        upcomingSection
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+                    .padding(.bottom, 32)
                 }
-                .listStyle(.plain)
                 .navigationTitle("Bible Memorize")
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -55,6 +61,16 @@ public struct MemoryDashboardView: View {
                 .sheet(isPresented: $isShowingAddVerse) {
                     AddVerseView(store: viewModel.store)
                 }
+                .sheet(item: $editingCard) { card in
+                    EditVerseView(
+                        title: card.verse.reference.formatted(for: viewModel.store.selectedTranslation),
+                        translation: viewModel.store.selectedTranslation,
+                        verseText: $editingVerseText,
+                        assignmentType: $editingAssignmentType
+                    ) {
+                        saveEditedVerse(cardID: card.id)
+                    }
+                }
             }
             .tabItem {
                 Label("Review", systemImage: "book.closed")
@@ -75,6 +91,9 @@ public struct MemoryDashboardView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .onAppear {
+            isMicPulseExpanded = true
+        }
     }
 
     private var statsSection: some View {
@@ -84,16 +103,51 @@ public struct MemoryDashboardView: View {
 
             HStack(spacing: 12) {
                 StatCard(title: "Due", value: "\(viewModel.dueCount)")
-                StatCard(title: "Pass", value: "\(viewModel.passCount)")
+                StatCard(title: "Pass", value: "\(viewModel.passCount)") {
+                    if viewModel.passCount > 0 {
+                        recitationRecognizer.resetCurrentReview()
+                        viewModel.store.resetAllPassedPrompts()
+                    }
+                }
                 StatCard(title: "Progress", value: "\(Int(viewModel.reviewCompletion * 100))%")
             }
 
-            Button(viewModel.store.todaysSession == nil ? "Start Review Session" : "Hide Review Session") {
-                viewModel.store.toggleSession()
+            HStack(spacing: 12) {
+                if viewModel.store.todaysSession != nil {
+                    sessionNavButton(
+                        systemName: "chevron.left",
+                        accessibilityLabel: "Previous Verse",
+                        isEnabled: viewModel.store.todaysSession?.canMoveToPreviousPrompt ?? false
+                    ) {
+                        viewModel.store.moveToPreviousSessionPrompt()
+                    }
+                }
+
+                Button {
+                    viewModel.store.toggleSession()
+                } label: {
+                    Image(systemName: viewModel.store.todaysSession == nil ? "play.circle.fill" : "eye.slash.circle.fill")
+                        .font(.system(size: 32, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .accessibilityLabel(viewModel.store.todaysSession == nil ? "Start Review Session" : "Hide Review Session")
+
+                if viewModel.store.todaysSession != nil {
+                    sessionNavButton(
+                        systemName: "chevron.right",
+                        accessibilityLabel: "Next Verse",
+                        isEnabled: viewModel.store.todaysSession?.canMoveToNextPrompt ?? false
+                    ) {
+                        viewModel.store.moveToNextSessionPrompt()
+                    }
+                }
             }
-            .buttonStyle(.borderedProminent)
 
             if let prompt = viewModel.store.todaysSession?.currentPrompt {
+                let isPromptPassed = recitationRecognizer.isComplete(for: prompt.cardID) || viewModel.store.isPromptPassed(prompt.cardID)
+
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .top) {
                         Text(prompt.reference)
@@ -101,10 +155,10 @@ public struct MemoryDashboardView: View {
 
                         Spacer()
 
-                        controls(for: prompt)
+                        controls(for: prompt, isPromptPassed: isPromptPassed)
                     }
                     Text(recitationRecognizer.displayText(for: prompt))
-                        .foregroundStyle(recitationRecognizer.isComplete(for: prompt.cardID) ? .green : .secondary)
+                        .foregroundStyle(isPromptPassed ? .green : .secondary)
 
                     if recitationRecognizer.isRecording(for: prompt.cardID) || !recitationRecognizer.transcript(for: prompt.cardID).isEmpty {
                         if recitationRecognizer.isRecording(for: prompt.cardID) {
@@ -113,51 +167,17 @@ public struct MemoryDashboardView: View {
 
                         Text(recitationRecognizer.transcript(for: prompt.cardID))
                             .font(.subheadline)
-                            .foregroundStyle(recitationRecognizer.isComplete(for: prompt.cardID) ? .green : .primary)
+                            .foregroundStyle(isPromptPassed ? .green : .primary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
-                    HStack {
-                        Button {
-                            viewModel.store.moveToPreviousSessionPrompt()
-                        } label: {
-                            Image(systemName: "chevron.left")
-                                .font(.subheadline.bold())
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(!(viewModel.store.todaysSession?.canMoveToPreviousPrompt ?? false))
-
-                        Spacer()
-
-                        Button {
-                            viewModel.store.moveToNextSessionPrompt()
-                        } label: {
-                            Image(systemName: "chevron.right")
-                                .font(.subheadline.bold())
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(!(viewModel.store.todaysSession?.canMoveToNextPrompt ?? false))
-                    }
                 }
                 .padding()
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(.regularMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
-                .overlay(alignment: .topTrailing) {
-                    if recitationRecognizer.isComplete(for: prompt.cardID) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "checkmark.circle.fill")
-                            Text("Pass")
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(.green)
-                        .foregroundStyle(.white)
-                        .clipShape(Capsule())
-                        .padding(12)
-                    }
-                }
                 .onAppear {
+                    updateMicHighlight(for: prompt.cardID, isPassed: isPromptPassed)
                     recitationRecognizer.prepare(
                         verseID: prompt.cardID,
                         targetText: prompt.promptText,
@@ -166,6 +186,7 @@ public struct MemoryDashboardView: View {
                     )
                 }
                 .onChange(of: prompt.id) { _, _ in
+                    updateMicHighlight(for: prompt.cardID, isPassed: isPromptPassed)
                     recitationRecognizer.prepare(
                         verseID: prompt.cardID,
                         targetText: prompt.promptText,
@@ -173,23 +194,49 @@ public struct MemoryDashboardView: View {
                         maskedWords: prompt.maskedWords
                     )
                 }
+                .onChange(of: recitationRecognizer.isComplete(for: prompt.cardID)) { _, isComplete in
+                    if isComplete {
+                        viewModel.store.markPromptPassed(cardID: prompt.cardID)
+                        highlightedMicPromptID = nil
+                    } else {
+                        viewModel.store.resetPromptPassed(cardID: prompt.cardID)
+                        updateMicHighlight(for: prompt.cardID, isPassed: false)
+                    }
+                }
             }
         }
     }
 
     private var dueSection: some View {
-        Section {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Due Now")
+                .font(.headline)
+
             ForEach(viewModel.store.dueCards) { card in
                 VerseRow(
                     card: card,
                     translation: viewModel.store.selectedTranslation,
                     speaker: speaker,
-                    speedMultiplier: viewModel.store.speechRateMultiplier
+                    speedMultiplier: viewModel.store.speechRateMultiplier,
+                    isPassed: viewModel.store.isPromptPassed(card.id),
+                    onEdit: {
+                        beginEditing(card)
+                    },
+                    onDelete: {
+                        viewModel.store.deleteVerse(cardID: card.id)
+                    }
                 )
-                .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-                .listRowBackground(Color.clear)
-                .onDrag {
-                    NSItemProvider(object: card.id.uuidString as NSString)
+                .overlay {
+                    if dueReorderTargetID == card.id {
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(Color.blue, lineWidth: 2)
+                    }
+                }
+                .draggable(card.id.uuidString)
+                .dropDestination(for: String.self) { items, _ in
+                    handleDueReorderDrop(items: items, targetCardID: card.id)
+                } isTargeted: { isTargeted in
+                    dueReorderTargetID = isTargeted ? card.id : (dueReorderTargetID == card.id ? nil : dueReorderTargetID)
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button(role: .destructive) {
@@ -199,27 +246,57 @@ public struct MemoryDashboardView: View {
                     }
                 }
             }
-        } header: {
-            Text("Due Now")
-                .font(.headline)
+
+            dueDropTargetRow
         }
     }
 
+    private var dueDropTargetRow: some View {
+        RoundedRectangle(cornerRadius: 14)
+            .strokeBorder(isDueDropTargeted ? Color.green : Color.secondary.opacity(0.35), style: StrokeStyle(lineWidth: 1.5, dash: [8, 6]))
+            .overlay {
+                HStack(spacing: 10) {
+                    Image(systemName: isDueDropTargeted ? "plus.circle.fill" : "arrow.up.circle")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(isDueDropTargeted ? .green : .secondary)
+
+                    Text(isDueDropTargeted ? "Drop to move into Due Now" : "Hold and drag an upcoming verse here")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(isDueDropTargeted ? .white : .secondary)
+                }
+            }
+            .frame(height: 64)
+            .background(isDueDropTargeted ? Color.green.opacity(0.18) : Color.white.opacity(0.03))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .dropDestination(for: String.self) { items, _ in
+                handleDueDrop(items: items)
+            } isTargeted: { isTargeted in
+                isDueDropTargeted = isTargeted
+            }
+    }
+
     private var upcomingSection: some View {
-        Section {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Upcoming")
+                .font(.headline)
+
             dropTargetRow
-                .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-                .listRowBackground(Color.clear)
 
             ForEach(viewModel.store.upcomingCards) { card in
                 VerseRow(
                     card: card,
                     translation: viewModel.store.selectedTranslation,
                     speaker: speaker,
-                    speedMultiplier: viewModel.store.speechRateMultiplier
+                    speedMultiplier: viewModel.store.speechRateMultiplier,
+                    isPassed: false,
+                    onEdit: {
+                        beginEditing(card)
+                    },
+                    onDelete: {
+                        viewModel.store.deleteVerse(cardID: card.id)
+                    }
                 )
-                .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-                .listRowBackground(Color.clear)
+                .draggable(card.id.uuidString)
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button(role: .destructive) {
                         viewModel.store.deleteVerse(cardID: card.id)
@@ -228,9 +305,6 @@ public struct MemoryDashboardView: View {
                     }
                 }
             }
-        } header: {
-            Text("Upcoming")
-                .font(.headline)
         }
     }
 
@@ -238,30 +312,38 @@ public struct MemoryDashboardView: View {
         RoundedRectangle(cornerRadius: 14)
             .strokeBorder(isUpcomingDropTargeted ? Color.blue : Color.secondary.opacity(0.35), style: StrokeStyle(lineWidth: 1.5, dash: [8, 6]))
             .overlay {
-                Text("Hold and drag a due verse here")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(isUpcomingDropTargeted ? .white : .secondary)
+                HStack(spacing: 10) {
+                    Image(systemName: isUpcomingDropTargeted ? "plus.circle.fill" : "arrow.down.circle")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(isUpcomingDropTargeted ? .blue : .secondary)
+
+                    Text(isUpcomingDropTargeted ? "Drop to move into Upcoming" : "Hold and drag a due verse here")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(isUpcomingDropTargeted ? .white : .secondary)
+                }
             }
             .frame(height: 64)
             .background(isUpcomingDropTargeted ? Color.blue.opacity(0.18) : Color.white.opacity(0.03))
             .clipShape(RoundedRectangle(cornerRadius: 14))
-            .onDrop(of: [UTType.plainText], isTargeted: $isUpcomingDropTargeted) { providers in
-                handleUpcomingDrop(providers: providers)
+            .dropDestination(for: String.self) { items, _ in
+                handleUpcomingDrop(items: items)
+            } isTargeted: { isTargeted in
+                isUpcomingDropTargeted = isTargeted
             }
     }
 
     @ViewBuilder
-    private func controls(for prompt: SessionPrompt) -> some View {
+    private func controls(for prompt: SessionPrompt, isPromptPassed: Bool) -> some View {
+        let shouldHighlightMic = highlightedMicPromptID == prompt.cardID && !isPromptPassed
+
         HStack(spacing: 14) {
-            if recitationRecognizer.isComplete(for: prompt.cardID) {
-                Button {
-                    recitationRecognizer.resetCurrentReview()
-                } label: {
-                    Image(systemName: "arrow.counterclockwise.circle.fill")
-                        .font(.headline)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Reset review")
+            if isPromptPassed {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 24, height: 24)
+                    .background(.green)
+                    .clipShape(Circle())
             }
 
             Button {
@@ -300,6 +382,7 @@ public struct MemoryDashboardView: View {
             .accessibilityLabel("Repeat verse")
 
             Button {
+                highlightedMicPromptID = nil
                 recitationRecognizer.toggleRecording(
                     verseID: prompt.cardID,
                     targetText: prompt.promptText,
@@ -310,42 +393,103 @@ public struct MemoryDashboardView: View {
                 Image(systemName: recitationRecognizer.isRecording(for: prompt.cardID) ? "waveform.circle.fill" : "mic.fill")
                     .font(.headline)
                     .foregroundStyle(recitationRecognizer.isRecording(for: prompt.cardID) ? .red : (recitationRecognizer.isComplete(for: prompt.cardID) ? .green : .primary))
+                    .scaleEffect(shouldHighlightMic && isMicPulseExpanded ? 1.15 : 1.0)
+                    .padding(8)
+                    .background(
+                        Circle()
+                            .fill(Color.red.opacity(shouldHighlightMic ? 0.18 : 0))
+                    )
+                    .overlay {
+                        Circle()
+                            .stroke(Color.red.opacity(shouldHighlightMic ? 0.8 : 0), lineWidth: 1.5)
+                            .scaleEffect(shouldHighlightMic && isMicPulseExpanded ? 1.35 : 1.0)
+                    }
+                    .animation(
+                        shouldHighlightMic
+                        ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
+                        : .easeOut(duration: 0.2),
+                        value: shouldHighlightMic
+                    )
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Record recitation")
         }
     }
 
-    private func handleUpcomingDrop(providers: [NSItemProvider]) -> Bool {
-        guard let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) }) else {
+    private func handleUpcomingDrop(items: [String]) -> Bool {
+        guard let item = items.first,
+              let cardID = UUID(uuidString: item.trimmingCharacters(in: .whitespacesAndNewlines)) else {
             return false
         }
 
-        provider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { item, _ in
-            let uuidString: String?
+        viewModel.store.moveCardToUpcoming(cardID: cardID)
+        return true
+    }
 
-            switch item {
-            case let data as Data:
-                uuidString = String(data: data, encoding: .utf8)
-            case let string as String:
-                uuidString = string
-            case let nsString as NSString:
-                uuidString = nsString as String
-            default:
-                uuidString = nil
-            }
-
-            guard let trimmedValue = uuidString?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  let cardID = UUID(uuidString: trimmedValue) else {
-                return
-            }
-
-            Task { @MainActor in
-                viewModel.store.moveCardToUpcoming(cardID: cardID)
-            }
+    private func handleDueDrop(items: [String]) -> Bool {
+        guard let item = items.first,
+              let cardID = UUID(uuidString: item.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return false
         }
 
+        viewModel.store.moveCardToDueNow(cardID: cardID)
         return true
+    }
+
+    private func handleDueReorderDrop(items: [String], targetCardID: UUID) -> Bool {
+        guard let item = items.first,
+              let draggedCardID = UUID(uuidString: item.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return false
+        }
+
+        let dueIDs = Set(viewModel.store.dueCards.map(\.id))
+        guard dueIDs.contains(draggedCardID), dueIDs.contains(targetCardID) else {
+            return false
+        }
+
+        viewModel.store.reorderDueCard(cardID: draggedCardID, before: targetCardID)
+        dueReorderTargetID = nil
+        return true
+    }
+
+    private func beginEditing(_ card: MemorizationCard) {
+        editingVerseText = card.verse.text(for: viewModel.store.selectedTranslation)
+        editingAssignmentType = viewModel.store.assignmentType(for: card.id)
+        editingCard = card
+    }
+
+    private func saveEditedVerse(cardID: UUID) {
+        viewModel.store.updateVerseText(
+            cardID: cardID,
+            translation: viewModel.store.selectedTranslation,
+            text: editingVerseText.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        viewModel.store.updateAssignmentType(cardID: cardID, assignmentType: editingAssignmentType)
+        editingCard = nil
+    }
+
+    private func updateMicHighlight(for promptID: UUID, isPassed: Bool) {
+        highlightedMicPromptID = isPassed ? nil : promptID
+        if !isMicPulseExpanded {
+            isMicPulseExpanded = true
+        }
+    }
+
+    private func sessionNavButton(
+        systemName: String,
+        accessibilityLabel: String,
+        isEnabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 26, weight: .bold))
+                .frame(width: 72)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .disabled(!isEnabled)
+        .accessibilityLabel(accessibilityLabel)
     }
 }
 
@@ -390,6 +534,7 @@ private struct AddVerseView: View {
     @State private var verseText = ""
     @State private var tagsText = ""
     @State private var difficulty: VerseDifficulty = .medium
+    @State private var assignmentType: VerseAssignmentType = .dueNow
 
     private var isValid: Bool {
         !verseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -459,6 +604,12 @@ private struct AddVerseView: View {
                 }
 
                 Section("Content") {
+                    Picker("Type", selection: $assignmentType) {
+                        ForEach(VerseAssignmentType.allCases) { type in
+                            Text(type.rawValue).tag(type)
+                        }
+                    }
+
                     TextField("Tags (comma separated)", text: $tagsText)
 
                     Picker("Difficulty", selection: $difficulty) {
@@ -544,7 +695,8 @@ private struct AddVerseView: View {
             translation: selectedTranslation,
             text: verseText.trimmingCharacters(in: .whitespacesAndNewlines),
             tags: tags,
-            difficulty: difficulty
+            difficulty: difficulty,
+            assignmentType: assignmentType
         )
 
         dismiss()
@@ -670,6 +822,13 @@ private extension Double {
 private struct StatCard: View {
     let title: String
     let value: String
+    let action: (() -> Void)?
+
+    init(title: String, value: String, action: (() -> Void)? = nil) {
+        self.title = title
+        self.value = value
+        self.action = action
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -683,6 +842,76 @@ private struct StatCard: View {
         .padding()
         .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(alignment: .topTrailing) {
+            if let action {
+                Button(action: action) {
+                    Image(systemName: "arrow.counterclockwise.circle.fill")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 24, height: 24)
+                        .background(Color.white.opacity(0.14))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(10)
+            }
+        }
+    }
+}
+
+private struct EditVerseView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let title: String
+    let translation: Translation
+    @Binding var verseText: String
+    @Binding var assignmentType: VerseAssignmentType
+    let onSave: () -> Void
+
+    private var isValid: Bool {
+        !verseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Reference") {
+                    LabeledContent("Verse") {
+                        Text(title)
+                    }
+
+                    LabeledContent("Translation") {
+                        Text(translation.rawValue)
+                    }
+                }
+
+                Section("Verse Text") {
+                    Picker("Type", selection: $assignmentType) {
+                        ForEach(VerseAssignmentType.allCases) { type in
+                            Text(type.rawValue).tag(type)
+                        }
+                    }
+
+                    TextEditor(text: $verseText)
+                        .frame(minHeight: 220)
+                }
+            }
+            .navigationTitle("Edit Verse")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Save") {
+                        onSave()
+                    }
+                    .disabled(!isValid)
+                }
+            }
+        }
     }
 }
 
@@ -691,6 +920,10 @@ private struct VerseRow: View {
     let translation: Translation
     @ObservedObject var speaker: VerseSpeaker
     let speedMultiplier: Double
+    let isPassed: Bool
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+    @State private var isShowingDeleteConfirmation = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -701,6 +934,22 @@ private struct VerseRow: View {
                 Spacer()
 
                 HStack(spacing: 14) {
+                    if isPassed {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 24, height: 24)
+                            .background(.green)
+                            .clipShape(Circle())
+                    }
+
+                    Button(action: onEdit) {
+                        Image(systemName: "pencil")
+                            .font(.headline)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Edit verse")
+
                     Button {
                         speaker.speak(
                             verseID: card.id,
@@ -735,6 +984,16 @@ private struct VerseRow: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Repeat verse")
+
+                    Button {
+                        isShowingDeleteConfirmation = true
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.headline)
+                            .foregroundStyle(.red)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Delete verse")
                 }
             }
             Text(card.verse.text(for: translation))
@@ -749,6 +1008,19 @@ private struct VerseRow: View {
         .padding()
         .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 14))
+        .confirmationDialog(
+            "Delete this verse?",
+            isPresented: $isShowingDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                onDelete()
+            }
+
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently remove the selected verse.")
+        }
     }
 }
 
@@ -757,6 +1029,7 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
     @Published private var repeatModes: [UUID: RepeatMode] = [:]
 
     private let synthesizer = AVSpeechSynthesizer()
+    private let audioSession = AVAudioSession.sharedInstance()
     private var activePlayback: ActivePlayback?
 
     override init() {
@@ -770,6 +1043,8 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
         translation: Translation,
         speedMultiplier: Double
     ) {
+        configureAudioSession()
+
         activePlayback = ActivePlayback(
             verseID: verseID,
             text: text,
@@ -788,6 +1063,15 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
             speedMultiplier: speedMultiplier
         )
         synthesizer.speak(utterance)
+    }
+
+    private func configureAudioSession() {
+        do {
+            try audioSession.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+        } catch {
+            assertionFailure("Failed to configure audio session for verse playback: \(error)")
+        }
     }
 
     func advanceRepeatMode(for verseID: UUID) {

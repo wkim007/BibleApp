@@ -31,6 +31,7 @@ public enum SampleData {
                 difficulty: .medium
             ),
             nextReviewDate: .now.addingTimeInterval(-3600),
+            sortOrder: 1,
             intervalDays: 1,
             easeFactor: 2.5,
             consecutiveSuccesses: 1,
@@ -60,6 +61,7 @@ public enum SampleData {
                 difficulty: .hard
             ),
             nextReviewDate: .now.addingTimeInterval(-7200),
+            sortOrder: 2,
             intervalDays: 3,
             easeFactor: 2.3,
             consecutiveSuccesses: 2,
@@ -89,6 +91,7 @@ public enum SampleData {
                 difficulty: .easy
             ),
             nextReviewDate: .now.addingTimeInterval(86400),
+            sortOrder: 3,
             intervalDays: 7,
             easeFactor: 2.7,
             consecutiveSuccesses: 4,

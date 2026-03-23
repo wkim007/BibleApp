@@ -19,11 +19,7 @@ public final class DashboardViewModel {
     }
 
     public var passCount: Int {
-        store.cards.reduce(into: 0) { result, card in
-            if card.consecutiveSuccesses >= 2 {
-                result += 1
-            }
-        }
+        store.passedPromptIDs.count
     }
 
     public var reviewCompletion: Double {
