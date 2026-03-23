@@ -17,21 +17,51 @@ public final class BibleMemorizeStore {
     public var speechRateMultiplier: Double {
         didSet { persistState() }
     }
+    public var isOpenAIEnabled: Bool {
+        didSet {
+            if !isOpenAIEnabled {
+                openAIValidationState = .off
+            } else if openAIAPIKey.isEmpty {
+                openAIValidationState = .idle
+            }
+            persistState()
+        }
+    }
+    public var openAIAPIKey: String {
+        didSet {
+            KeychainStore.save(openAIAPIKey)
+            if isOpenAIEnabled, oldValue != openAIAPIKey {
+                openAIValidationState = openAIAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .idle : .idle
+            }
+        }
+    }
+    public private(set) var openAIValidationState: OpenAIValidationState
+    public private(set) var openAIStatusMessage: String?
 
     private let scheduler: MemorizationScheduler
+    private let openAIClient: OpenAIClient
 
     public init(
         cards: [MemorizationCard],
         collections: [MemorizationCollection],
         selectedTranslation: Translation = .nkjv,
         speechRateMultiplier: Double = 1.0,
-        scheduler: MemorizationScheduler = MemorizationScheduler()
+        isOpenAIEnabled: Bool = false,
+        openAIAPIKey: String = "",
+        openAIValidationState: OpenAIValidationState = .off,
+        scheduler: MemorizationScheduler = MemorizationScheduler(),
+        openAIClient: OpenAIClient = OpenAIClient()
     ) {
         self.cards = cards
         self.collections = collections
         self.selectedTranslation = selectedTranslation
         self.speechRateMultiplier = speechRateMultiplier
+        self.isOpenAIEnabled = isOpenAIEnabled
+        self.openAIAPIKey = openAIAPIKey
+        self.openAIValidationState = openAIValidationState
+        self.openAIStatusMessage = nil
         self.scheduler = scheduler
+        self.openAIClient = openAIClient
     }
 
     public convenience init() {
@@ -40,16 +70,26 @@ public final class BibleMemorizeStore {
                 cards: snapshot.cards,
                 collections: snapshot.collections,
                 selectedTranslation: snapshot.selectedTranslation,
-                speechRateMultiplier: snapshot.speechRateMultiplier
+                speechRateMultiplier: snapshot.speechRateMultiplier,
+                isOpenAIEnabled: snapshot.openAIEnabled,
+                openAIAPIKey: KeychainStore.load(),
+                openAIValidationState: snapshot.openAIEnabled ? .idle : .off
             )
         } else {
             self.init(
                 cards: SampleData.seedCards,
                 collections: SampleData.seedCollections,
                 selectedTranslation: .nkjv,
-                speechRateMultiplier: 1.0
+                speechRateMultiplier: 1.0,
+                isOpenAIEnabled: false,
+                openAIAPIKey: KeychainStore.load(),
+                openAIValidationState: .off
             )
         }
+    }
+
+    public var canUseOpenAI: Bool {
+        isOpenAIEnabled && openAIValidationState == .valid && !openAIAPIKey.isEmpty
     }
 
     public var dueCards: [MemorizationCard] {
@@ -137,6 +177,51 @@ public final class BibleMemorizeStore {
         }
     }
 
+    public func setOpenAIEnabled(_ isEnabled: Bool) {
+        isOpenAIEnabled = isEnabled
+    }
+
+    public func validateOpenAIKey() async {
+        guard isOpenAIEnabled else {
+            openAIValidationState = .off
+            openAIStatusMessage = "OpenAI mode is off."
+            return
+        }
+
+        let trimmedKey = openAIAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedKey.isEmpty else {
+            openAIValidationState = .invalid
+            openAIStatusMessage = "Enter an API key first."
+            return
+        }
+
+        openAIValidationState = .validating
+        openAIStatusMessage = "Validating key..."
+
+        do {
+            try await openAIClient.validate(apiKey: trimmedKey)
+            openAIValidationState = .valid
+            openAIStatusMessage = "API key is valid."
+        } catch OpenAIClientError.invalidAPIKey {
+            openAIValidationState = .invalid
+            openAIStatusMessage = "API key is invalid."
+        } catch {
+            openAIValidationState = .failed
+            openAIStatusMessage = "Validation failed. Check your network and try again."
+        }
+    }
+
+    public func fetchVerseTextWithAI(request: VerseLookupRequest) async throws -> String {
+        guard canUseOpenAI else {
+            throw OpenAIClientError.invalidAPIKey
+        }
+
+        return try await openAIClient.fetchVerseText(
+            apiKey: openAIAPIKey.trimmingCharacters(in: .whitespacesAndNewlines),
+            request: request
+        )
+    }
+
     @discardableResult
     public func submitGrade(
         for cardID: UUID,
@@ -172,7 +257,8 @@ public final class BibleMemorizeStore {
                 cards: cards,
                 collections: collections,
                 selectedTranslation: selectedTranslation,
-                speechRateMultiplier: speechRateMultiplier
+                speechRateMultiplier: speechRateMultiplier,
+                openAIEnabled: isOpenAIEnabled
             )
         )
     }

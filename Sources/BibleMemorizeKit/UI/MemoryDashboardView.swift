@@ -36,7 +36,15 @@ public struct MemoryDashboardView: View {
                         Button {
                             isShowingAddVerse = true
                         } label: {
-                            Image(systemName: "plus")
+                            Image(systemName: "plus.circle.fill")
+                                .overlay(alignment: .topTrailing) {
+                                    if viewModel.store.isOpenAIEnabled {
+                                        Image(systemName: "sparkles")
+                                            .font(.caption2.bold())
+                                            .foregroundStyle(.green)
+                                            .offset(x: 5, y: -5)
+                                    }
+                                }
                         }
                     }
                 }
@@ -219,42 +227,89 @@ private struct AddVerseView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var store: BibleMemorizeStore
 
-    @State private var book = ""
-    @State private var chapter = ""
-    @State private var verseStart = ""
-    @State private var verseEnd = ""
+    @State private var selectedTranslation: Translation = .nkjv
+    @State private var selectedBook: BibleBook = .john
+    @State private var selectedChapter = 1
+    @State private var selectedVerseStart = 1
+    @State private var selectedVerseEndEnabled = false
+    @State private var selectedVerseEnd = 1
     @State private var verseText = ""
     @State private var tagsText = ""
     @State private var difficulty: VerseDifficulty = .medium
+    @State private var isFetchingVerseText = false
+    @State private var aiLookupMessage: String?
 
     private var isValid: Bool {
-        !book.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && Int(chapter).map { $0 > 0 } == true
-            && Int(verseStart).map { $0 > 0 } == true
-            && !verseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !verseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var aiLookupSignature: String {
+        [
+            selectedTranslation.rawValue,
+            selectedBook.rawValue,
+            String(selectedChapter),
+            String(selectedVerseStart),
+            selectedVerseEndEnabled ? String(selectedVerseEnd) : ""
+        ].joined(separator: "|")
+    }
+
+    private var availableChapters: [Int] {
+        Array(1...150)
+    }
+
+    private var availableVerses: [Int] {
+        Array(1...176)
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Reference") {
-                    TextField("Book", text: $book)
-                    TextField("Chapter", text: $chapter)
-                        .keyboardType(.numberPad)
-                    TextField("Verse Start", text: $verseStart)
-                        .keyboardType(.numberPad)
-                    TextField("Verse End (Optional)", text: $verseEnd)
-                        .keyboardType(.numberPad)
+                    Picker("Translation", selection: $selectedTranslation) {
+                        ForEach(Translation.allCases) { translation in
+                            Text(translation.rawValue).tag(translation)
+                        }
+                    }
+
+                    Picker("Book", selection: $selectedBook) {
+                        ForEach(BibleBook.allCases) { book in
+                            Text(book.displayName(for: selectedTranslation)).tag(book)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Picker("Chapter", selection: $selectedChapter) {
+                        ForEach(availableChapters, id: \.self) { chapter in
+                            Text("\(chapter)").tag(chapter)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Picker("Verse Start", selection: $selectedVerseStart) {
+                        ForEach(availableVerses, id: \.self) { verse in
+                            Text("\(verse)").tag(verse)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .onChange(of: selectedVerseStart) { _, newValue in
+                        if selectedVerseEnd < newValue {
+                            selectedVerseEnd = newValue
+                        }
+                    }
+
+                    Toggle("Use Verse End", isOn: $selectedVerseEndEnabled)
+
+                    if selectedVerseEndEnabled {
+                        Picker("Verse End", selection: $selectedVerseEnd) {
+                            ForEach(availableVerses.filter { $0 >= selectedVerseStart }, id: \.self) { verse in
+                                Text("\(verse)").tag(verse)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
                 }
 
                 Section("Content") {
-                    HStack {
-                        Text("Translation")
-                        Spacer()
-                        Text(store.selectedTranslation.rawValue)
-                            .foregroundStyle(.secondary)
-                    }
-
                     TextField("Tags (comma separated)", text: $tagsText)
 
                     Picker("Difficulty", selection: $difficulty) {
@@ -265,9 +320,24 @@ private struct AddVerseView: View {
 
                     TextField("Verse Text", text: $verseText, axis: .vertical)
                         .lineLimit(5...10)
+
+                    if store.canUseOpenAI {
+                        if isFetchingVerseText {
+                            SwiftUI.ProgressView()
+                        }
+
+                        if let aiLookupMessage {
+                            Text(aiLookupMessage)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
             }
             .navigationTitle("Add Verse")
+            .task(id: aiLookupSignature) {
+                await fetchVerseTextIfNeeded()
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") {
@@ -283,19 +353,12 @@ private struct AddVerseView: View {
                 }
             }
         }
+        .onAppear {
+            selectedTranslation = store.selectedTranslation
+        }
     }
 
     private func saveVerse() {
-        guard
-            let chapterValue = Int(chapter),
-            let verseStartValue = Int(verseStart),
-            chapterValue > 0,
-            verseStartValue > 0
-        else {
-            return
-        }
-
-        let verseEndValue = Int(verseEnd)
         let tags = tagsText
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -303,18 +366,43 @@ private struct AddVerseView: View {
 
         store.addVerse(
             reference: BibleReference(
-                book: book.trimmingCharacters(in: .whitespacesAndNewlines),
-                chapter: chapterValue,
-                verseStart: verseStartValue,
-                verseEnd: verseEndValue
+                book: selectedBook.rawValue,
+                chapter: selectedChapter,
+                verseStart: selectedVerseStart,
+                verseEnd: selectedVerseEndEnabled ? selectedVerseEnd : nil
             ),
-            translation: store.selectedTranslation,
+            translation: selectedTranslation,
             text: verseText.trimmingCharacters(in: .whitespacesAndNewlines),
             tags: tags,
             difficulty: difficulty
         )
 
         dismiss()
+    }
+
+    private func fetchVerseTextIfNeeded() async {
+        guard store.canUseOpenAI else { return }
+
+        isFetchingVerseText = true
+        aiLookupMessage = "Fetching verse text with OpenAI..."
+
+        do {
+            let text = try await store.fetchVerseTextWithAI(
+                request: VerseLookupRequest(
+                    translation: selectedTranslation,
+                    book: selectedBook.rawValue,
+                    chapter: selectedChapter,
+                    verseStart: selectedVerseStart,
+                    verseEnd: selectedVerseEndEnabled ? selectedVerseEnd : nil
+                )
+            )
+            verseText = text
+            aiLookupMessage = "Verse text loaded. You can still edit it."
+        } catch {
+            aiLookupMessage = "Could not load verse text automatically."
+        }
+
+        isFetchingVerseText = false
     }
 }
 
@@ -371,6 +459,31 @@ private struct SettingsView: View {
                 Text("1.0x is normal speed. Lower values speak more slowly, and higher values speak faster.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+            }
+
+            Section("AI (OpenAI) Mode") {
+                Toggle("Enable AI Mode", isOn: Binding(
+                    get: { store.isOpenAIEnabled },
+                    set: { store.setOpenAIEnabled($0) }
+                ))
+
+                SecureField("OpenAI API Key", text: $store.openAIAPIKey)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .disabled(!store.isOpenAIEnabled)
+
+                Button("Validate Key") {
+                    Task {
+                        await store.validateOpenAIKey()
+                    }
+                }
+                .disabled(!store.isOpenAIEnabled)
+
+                if let status = store.openAIStatusMessage {
+                    Text(status)
+                        .font(.footnote)
+                        .foregroundStyle(store.openAIValidationState == .valid ? .green : .secondary)
+                }
             }
         }
         .navigationTitle("Settings")

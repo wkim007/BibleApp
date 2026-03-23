@@ -5,6 +5,7 @@ struct StoreSnapshot: Codable {
     var collections: [MemorizationCollection]
     var selectedTranslation: Translation
     var speechRateMultiplier: Double
+    var openAIEnabled: Bool
 }
 
 enum StorePersistence {

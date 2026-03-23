@@ -58,31 +58,7 @@ public struct BibleReference: Codable, Hashable, Sendable {
     }
 
     private static func localizedBookName(_ book: String, for translation: Translation) -> String {
-        let names: [String: [Translation: String]] = [
-            "Joshua": [
-                .korean: "여호수아",
-                .chinese: "约书亚记",
-                .spanish: "Josue",
-                .japanese: "ヨシュア記",
-                .german: "Josua"
-            ],
-            "Romans": [
-                .korean: "로마서",
-                .chinese: "罗马书",
-                .spanish: "Romanos",
-                .japanese: "ローマ人への手紙",
-                .german: "Romer"
-            ],
-            "Psalm": [
-                .korean: "시편",
-                .chinese: "诗篇",
-                .spanish: "Salmos",
-                .japanese: "詩篇",
-                .german: "Psalm"
-            ]
-        ]
-
-        return names[book]?[translation] ?? book
+        BibleBook.from(name: book)?.displayName(for: translation) ?? book
     }
 }
 
