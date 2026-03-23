@@ -260,6 +260,8 @@
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BibleMemorizeApp;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Bible Memorize uses the microphone to listen to your verse recitation during review sessions.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Bible Memorize uses speech recognition to compare your spoken recitation with the current verse.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -289,6 +291,8 @@
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BibleMemorizeApp;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Bible Memorize uses the microphone to listen to your verse recitation during review sessions.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Bible Memorize uses speech recognition to compare your spoken recitation with the current verse.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

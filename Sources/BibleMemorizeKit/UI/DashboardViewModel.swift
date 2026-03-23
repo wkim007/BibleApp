@@ -18,7 +18,7 @@ public final class DashboardViewModel {
         store.dueCards.count
     }
 
-    public var streakEstimate: Int {
+    public var passCount: Int {
         store.cards.reduce(into: 0) { result, card in
             if card.consecutiveSuccesses >= 2 {
                 result += 1
@@ -27,8 +27,8 @@ public final class DashboardViewModel {
     }
 
     public var reviewCompletion: Double {
-        let total = store.cards.count
-        guard total > 0 else { return 0 }
-        return Double(total - store.dueCards.count) / Double(total)
+        let due = dueCount
+        guard due > 0 else { return 1 }
+        return min(Double(passCount) / Double(due), 1)
     }
 }

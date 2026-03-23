@@ -1,10 +1,14 @@
 import SwiftUI
 import AVFoundation
+import Speech
+import UniformTypeIdentifiers
 
 public struct MemoryDashboardView: View {
     @State private var viewModel: DashboardViewModel
     @StateObject private var speaker = VerseSpeaker()
+    @StateObject private var recitationRecognizer = VerseRecitationRecognizer()
     @State private var isShowingAddVerse = false
+    @State private var isUpcomingDropTargeted = false
 
     @MainActor
     public init(viewModel: DashboardViewModel) {
@@ -80,7 +84,7 @@ public struct MemoryDashboardView: View {
 
             HStack(spacing: 12) {
                 StatCard(title: "Due", value: "\(viewModel.dueCount)")
-                StatCard(title: "Solid", value: "\(viewModel.streakEstimate)")
+                StatCard(title: "Pass", value: "\(viewModel.passCount)")
                 StatCard(title: "Progress", value: "\(Int(viewModel.reviewCompletion * 100))%")
             }
 
@@ -97,10 +101,21 @@ public struct MemoryDashboardView: View {
 
                         Spacer()
 
-                        controls(for: prompt.cardID, text: prompt.promptText)
+                        controls(for: prompt)
                     }
-                    Text(prompt.maskedWords.joined(separator: " "))
-                        .foregroundStyle(.secondary)
+                    Text(recitationRecognizer.displayText(for: prompt))
+                        .foregroundStyle(recitationRecognizer.isComplete(for: prompt.cardID) ? .green : .secondary)
+
+                    if recitationRecognizer.isRecording(for: prompt.cardID) || !recitationRecognizer.transcript(for: prompt.cardID).isEmpty {
+                        if recitationRecognizer.isRecording(for: prompt.cardID) {
+                            VoiceInputIndicator(level: recitationRecognizer.inputLevel(for: prompt.cardID))
+                        }
+
+                        Text(recitationRecognizer.transcript(for: prompt.cardID))
+                            .font(.subheadline)
+                            .foregroundStyle(recitationRecognizer.isComplete(for: prompt.cardID) ? .green : .primary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
 
                     HStack {
                         Button {
@@ -128,6 +143,36 @@ public struct MemoryDashboardView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(.regularMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
+                .overlay(alignment: .topTrailing) {
+                    if recitationRecognizer.isComplete(for: prompt.cardID) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark.circle.fill")
+                            Text("Pass")
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.green)
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                        .padding(12)
+                    }
+                }
+                .onAppear {
+                    recitationRecognizer.prepare(
+                        verseID: prompt.cardID,
+                        targetText: prompt.promptText,
+                        translation: viewModel.store.selectedTranslation,
+                        maskedWords: prompt.maskedWords
+                    )
+                }
+                .onChange(of: prompt.id) { _, _ in
+                    recitationRecognizer.prepare(
+                        verseID: prompt.cardID,
+                        targetText: prompt.promptText,
+                        translation: viewModel.store.selectedTranslation,
+                        maskedWords: prompt.maskedWords
+                    )
+                }
             }
         }
     }
@@ -143,6 +188,9 @@ public struct MemoryDashboardView: View {
                 )
                 .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                 .listRowBackground(Color.clear)
+                .onDrag {
+                    NSItemProvider(object: card.id.uuidString as NSString)
+                }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button(role: .destructive) {
                         viewModel.store.deleteVerse(cardID: card.id)
@@ -159,6 +207,10 @@ public struct MemoryDashboardView: View {
 
     private var upcomingSection: some View {
         Section {
+            dropTargetRow
+                .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                .listRowBackground(Color.clear)
+
             ForEach(viewModel.store.upcomingCards) { card in
                 VerseRow(
                     card: card,
@@ -182,13 +234,40 @@ public struct MemoryDashboardView: View {
         }
     }
 
+    private var dropTargetRow: some View {
+        RoundedRectangle(cornerRadius: 14)
+            .strokeBorder(isUpcomingDropTargeted ? Color.blue : Color.secondary.opacity(0.35), style: StrokeStyle(lineWidth: 1.5, dash: [8, 6]))
+            .overlay {
+                Text("Hold and drag a due verse here")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(isUpcomingDropTargeted ? .white : .secondary)
+            }
+            .frame(height: 64)
+            .background(isUpcomingDropTargeted ? Color.blue.opacity(0.18) : Color.white.opacity(0.03))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .onDrop(of: [UTType.plainText], isTargeted: $isUpcomingDropTargeted) { providers in
+                handleUpcomingDrop(providers: providers)
+            }
+    }
+
     @ViewBuilder
-    private func controls(for verseID: UUID, text: String) -> some View {
+    private func controls(for prompt: SessionPrompt) -> some View {
         HStack(spacing: 14) {
+            if recitationRecognizer.isComplete(for: prompt.cardID) {
+                Button {
+                    recitationRecognizer.resetCurrentReview()
+                } label: {
+                    Image(systemName: "arrow.counterclockwise.circle.fill")
+                        .font(.headline)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Reset review")
+            }
+
             Button {
                 speaker.speak(
-                    verseID: verseID,
-                    text: text,
+                    verseID: prompt.cardID,
+                    text: prompt.promptText,
                     translation: viewModel.store.selectedTranslation,
                     speedMultiplier: viewModel.store.speechRateMultiplier
                 )
@@ -200,12 +279,12 @@ public struct MemoryDashboardView: View {
             .accessibilityLabel("Speak verse")
 
             Button {
-                speaker.advanceRepeatMode(for: verseID)
+                speaker.advanceRepeatMode(for: prompt.cardID)
             } label: {
                 Image(systemName: "repeat")
                     .font(.headline)
                     .overlay(alignment: .topTrailing) {
-                        if let label = speaker.repeatBadge(for: verseID) {
+                        if let label = speaker.repeatBadge(for: prompt.cardID) {
                             Text(label)
                                 .font(.caption2.bold())
                                 .padding(.horizontal, 4)
@@ -219,7 +298,82 @@ public struct MemoryDashboardView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Repeat verse")
+
+            Button {
+                recitationRecognizer.toggleRecording(
+                    verseID: prompt.cardID,
+                    targetText: prompt.promptText,
+                    maskedWords: prompt.maskedWords,
+                    translation: viewModel.store.selectedTranslation
+                )
+            } label: {
+                Image(systemName: recitationRecognizer.isRecording(for: prompt.cardID) ? "waveform.circle.fill" : "mic.fill")
+                    .font(.headline)
+                    .foregroundStyle(recitationRecognizer.isRecording(for: prompt.cardID) ? .red : (recitationRecognizer.isComplete(for: prompt.cardID) ? .green : .primary))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Record recitation")
         }
+    }
+
+    private func handleUpcomingDrop(providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) }) else {
+            return false
+        }
+
+        provider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { item, _ in
+            let uuidString: String?
+
+            switch item {
+            case let data as Data:
+                uuidString = String(data: data, encoding: .utf8)
+            case let string as String:
+                uuidString = string
+            case let nsString as NSString:
+                uuidString = nsString as String
+            default:
+                uuidString = nil
+            }
+
+            guard let trimmedValue = uuidString?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  let cardID = UUID(uuidString: trimmedValue) else {
+                return
+            }
+
+            Task { @MainActor in
+                viewModel.store.moveCardToUpcoming(cardID: cardID)
+            }
+        }
+
+        return true
+    }
+}
+
+private struct VoiceInputIndicator: View {
+    let level: Double
+
+    var body: some View {
+        HStack(spacing: 7) {
+            ForEach(0..<14, id: \.self) { index in
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(index < activeBars ? activeColor(for: index) : Color.secondary.opacity(0.25))
+                    .frame(width: 6, height: 14)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Color.white.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(.easeInOut(duration: 0.12), value: activeBars)
+    }
+
+    private var activeBars: Int {
+        min(14, Int((level * 14).rounded(.up)))
+    }
+
+    private func activeColor(for index: Int) -> Color {
+        index < 2 ? .red : .secondary.opacity(0.85)
     }
 }
 
@@ -260,12 +414,23 @@ private struct AddVerseView: View {
                         }
                     }
 
-                    Picker("Book", selection: $selectedBook) {
-                        ForEach(BibleBook.allCases) { book in
-                            Text(book.displayName(for: selectedTranslation)).tag(book)
+                    Menu {
+                        Picker("Book", selection: $selectedBook) {
+                            ForEach(BibleBook.allCases) { book in
+                                Text(book.displayName(for: selectedTranslation)).tag(book)
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Text("Book")
+                            Spacer()
+                            Text(selectedBook.displayName(for: selectedTranslation))
+                                .foregroundStyle(.tint)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
                         }
                     }
-                    .pickerStyle(.menu)
 
                     Picker("Chapter", selection: $selectedChapter) {
                         ForEach(availableChapters, id: \.self) { chapter in
@@ -696,6 +861,416 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
         let scaledRate = AVSpeechUtteranceDefaultSpeechRate * Float(normalizedMultiplier)
         utterance.rate = min(max(scaledRate, AVSpeechUtteranceMinimumSpeechRate), AVSpeechUtteranceMaximumSpeechRate)
         return utterance
+    }
+}
+
+@MainActor
+private final class VerseRecitationRecognizer: NSObject, ObservableObject {
+    struct RecognitionState {
+        var verseID: UUID
+        var targetText: String
+        var maskedWords: [String]
+        var translation: Translation
+        var transcript: String = ""
+        var isComplete = false
+        var recognitionScore: Double = 0
+        var inputLevel: Double = 0
+    }
+
+    @Published private var currentState: RecognitionState?
+    @Published private var isRecording = false
+
+    private let audioEngine = AVAudioEngine()
+    private var speechRecognizer: SFSpeechRecognizer?
+    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    private var recognitionTask: SFSpeechRecognitionTask?
+    private var silenceGeneration = 0
+
+    func prepare(verseID: UUID, targetText: String, translation: Translation, maskedWords: [String] = []) {
+        guard currentState?.verseID != verseID || currentState?.targetText != targetText || currentState?.translation != translation else {
+            return
+        }
+        stop()
+        currentState = RecognitionState(
+            verseID: verseID,
+            targetText: targetText,
+            maskedWords: maskedWords,
+            translation: translation
+        )
+    }
+
+    func toggleRecording(verseID: UUID, targetText: String, maskedWords: [String], translation: Translation) {
+        prepare(verseID: verseID, targetText: targetText, translation: translation, maskedWords: maskedWords)
+        if isRecording {
+            stop()
+        } else {
+            Task {
+                await start()
+            }
+        }
+    }
+
+    func transcript(for verseID: UUID) -> String {
+        currentState?.verseID == verseID ? currentState?.transcript ?? "" : ""
+    }
+
+    func isRecording(for verseID: UUID) -> Bool {
+        currentState?.verseID == verseID && isRecording
+    }
+
+    func isComplete(for verseID: UUID) -> Bool {
+        currentState?.verseID == verseID && (currentState?.isComplete ?? false)
+    }
+
+    func inputLevel(for verseID: UUID) -> Double {
+        currentState?.verseID == verseID ? currentState?.inputLevel ?? 0 : 0
+    }
+
+    func displayText(for prompt: SessionPrompt) -> String {
+        guard currentState?.verseID == prompt.cardID else {
+            return prompt.maskedWords.joined(separator: " ")
+        }
+
+        let targetWords = prompt.promptText.split(separator: " ").map(String.init)
+        let translation = currentState?.translation ?? .nkjv
+        let transcriptText = transcript(for: prompt.cardID)
+        let transcriptWords = normalize(transcriptText, translation: translation).split(separator: " ").map(String.init)
+        let canonicalTranscript = canonicalComparisonText(transcriptText, translation: translation)
+
+        let displayWords = prompt.maskedWords.enumerated().map { index, maskedWord in
+            guard maskedWord == "____", index < targetWords.count else {
+                return maskedWord
+            }
+
+            let normalizedTarget = normalize(targetWords[index], translation: translation)
+            let canonicalTarget = canonicalComparisonText(targetWords[index], translation: translation)
+            if transcriptWords.contains(normalizedTarget)
+                || (!canonicalTarget.isEmpty && canonicalTranscript.contains(canonicalTarget))
+                || isComplete(for: prompt.cardID) {
+                return targetWords[index]
+            }
+
+            return maskedWord
+        }
+
+        return displayWords.joined(separator: " ")
+    }
+
+    func stop() {
+        silenceGeneration += 1
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        recognitionRequest?.endAudio()
+        recognitionRequest = nil
+        if audioEngine.isRunning {
+            audioEngine.stop()
+            audioEngine.inputNode.removeTap(onBus: 0)
+        }
+        isRecording = false
+        currentState?.inputLevel = 0
+    }
+
+    func resetCurrentReview() {
+        stop()
+        currentState?.transcript = ""
+        currentState?.isComplete = false
+        currentState?.recognitionScore = 0
+        currentState?.inputLevel = 0
+    }
+
+    private func start() async {
+        guard let state = currentState else { return }
+        do {
+            try await requestPermissions()
+
+            let locale = Locale(identifier: state.translation.speechLanguageCode)
+            guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable else {
+                currentState?.transcript = localizedMessage(.unavailable, translation: state.translation)
+                return
+            }
+
+            speechRecognizer = recognizer
+            recognitionTask?.cancel()
+            recognitionTask = nil
+
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.record, mode: .measurement, options: [.duckOthers])
+            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+
+            let request = SFSpeechAudioBufferRecognitionRequest()
+            request.shouldReportPartialResults = true
+            request.requiresOnDeviceRecognition = false
+            recognitionRequest = request
+
+            let inputNode = audioEngine.inputNode
+            inputNode.removeTap(onBus: 0)
+            inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputNode.outputFormat(forBus: 0)) { [weak self] buffer, _ in
+                let level = Self.audioLevel(from: buffer)
+                Task { @MainActor in
+                    self?.currentState?.inputLevel = level
+                }
+                self?.recognitionRequest?.append(buffer)
+            }
+
+            audioEngine.prepare()
+            try audioEngine.start()
+            isRecording = true
+            scheduleSilenceTimeout()
+
+            recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+                Task { @MainActor in
+                    guard let self else { return }
+
+                    if let result {
+                        let transcript = self.sanitizeTranscript(result.bestTranscription.formattedString, translation: state.translation)
+                        self.currentState?.transcript = transcript
+                        let score = self.recognitionScore(for: transcript)
+                        let complete = (self.currentState?.isComplete ?? false)
+                            || score >= 1
+                            || self.allMaskedWordsRevealed(for: transcript)
+                        self.currentState?.recognitionScore = score
+                        self.currentState?.isComplete = complete
+                        self.scheduleSilenceTimeout()
+
+                        if complete || result.isFinal {
+                            self.stop()
+                        }
+                    } else if error != nil {
+                        self.stop()
+                    }
+                }
+            }
+        } catch {
+            currentState?.transcript = localizedMessage(.permissionRequired, translation: state.translation)
+            stop()
+        }
+    }
+
+    private func requestPermissions() async throws {
+        let speechStatus = await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { status in
+                continuation.resume(returning: status)
+            }
+        }
+
+        guard speechStatus == .authorized else {
+            throw RecognitionError.permissionDenied
+        }
+
+        let micGranted = await withCheckedContinuation { continuation in
+            AVAudioApplication.requestRecordPermission { granted in
+                continuation.resume(returning: granted)
+            }
+        }
+
+        guard micGranted else {
+            throw RecognitionError.permissionDenied
+        }
+    }
+
+    private func completionReached(transcript: String) -> Bool {
+        recognitionScore(for: transcript) >= 1
+    }
+
+    private func recognitionScore(for transcript: String) -> Double {
+        guard let state = currentState else { return 0 }
+
+        let normalizedTranscript = normalize(transcript, translation: state.translation)
+        let normalizedTarget = normalize(state.targetText, translation: state.translation)
+        let canonicalTranscript = canonicalComparisonText(transcript, translation: state.translation)
+        let canonicalTarget = canonicalComparisonText(state.targetText, translation: state.translation)
+
+        let spacedScore = similarityScore(lhs: normalizedTranscript, rhs: normalizedTarget)
+        let canonicalScore = similarityScore(lhs: canonicalTranscript, rhs: canonicalTarget)
+        return max(spacedScore, canonicalScore)
+    }
+
+    private func allMaskedWordsRevealed(for transcript: String) -> Bool {
+        guard let state = currentState else { return false }
+
+        let targetWords = state.targetText.split(separator: " ").map(String.init)
+        let transcriptWords = normalize(transcript, translation: state.translation).split(separator: " ").map(String.init)
+        let canonicalTranscript = canonicalComparisonText(transcript, translation: state.translation)
+
+        for (index, maskedWord) in state.maskedWords.enumerated() {
+            guard maskedWord == "____", index < targetWords.count else { continue }
+
+            let normalizedTarget = normalize(targetWords[index], translation: state.translation)
+            let canonicalTarget = canonicalComparisonText(targetWords[index], translation: state.translation)
+
+            let isRevealed = transcriptWords.contains(normalizedTarget)
+                || (!canonicalTarget.isEmpty && canonicalTranscript.contains(canonicalTarget))
+
+            if !isRevealed {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    private func normalize(_ text: String, translation: Translation) -> String {
+        let sanitized = sanitizeTranscript(text, translation: translation)
+        let filtered = String(
+            sanitized
+                .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+                .unicodeScalars
+                .map { scalar in
+                    CharacterSet.alphanumerics.contains(scalar) || CharacterSet.whitespaces.contains(scalar)
+                        ? Character(scalar)
+                        : " "
+                }
+        )
+
+        return filtered
+            .split(whereSeparator: \.isWhitespace)
+            .map(String.init)
+            .joined(separator: " ")
+    }
+
+    private func canonicalComparisonText(_ text: String, translation: Translation) -> String {
+        normalize(text, translation: translation)
+            .replacingOccurrences(of: " ", with: "")
+    }
+
+    private func similarityScore(lhs: String, rhs: String) -> Double {
+        guard !lhs.isEmpty, !rhs.isEmpty else { return 0 }
+        if lhs == rhs {
+            return 1
+        }
+
+        let lhsCharacters = Array(lhs)
+        let rhsCharacters = Array(rhs)
+        let distance = levenshteinDistance(lhsCharacters, rhsCharacters)
+        let longestCount = max(lhsCharacters.count, rhsCharacters.count)
+        guard longestCount > 0 else { return 0 }
+        return max(0, 1 - (Double(distance) / Double(longestCount)))
+    }
+
+    private func levenshteinDistance(_ lhs: [Character], _ rhs: [Character]) -> Int {
+        if lhs.isEmpty { return rhs.count }
+        if rhs.isEmpty { return lhs.count }
+
+        var previous = Array(0...rhs.count)
+        for (lhsIndex, lhsCharacter) in lhs.enumerated() {
+            var current = [lhsIndex + 1]
+            current.reserveCapacity(rhs.count + 1)
+
+            for (rhsIndex, rhsCharacter) in rhs.enumerated() {
+                let substitutionCost = lhsCharacter == rhsCharacter ? 0 : 1
+                current.append(
+                    min(
+                        previous[rhsIndex + 1] + 1,
+                        current[rhsIndex] + 1,
+                        previous[rhsIndex] + substitutionCost
+                    )
+                )
+            }
+
+            previous = current
+        }
+
+        return previous[rhs.count]
+    }
+
+    private func sanitizeTranscript(_ text: String, translation: Translation) -> String {
+        switch translation {
+        case .korean:
+            return text.filter { character in
+                character.isWhitespace
+                    || character.isNumber
+                    || character.unicodeScalars.contains(where: { scalar in
+                        (0x1100...0x11FF).contains(scalar.value)
+                            || (0x3130...0x318F).contains(scalar.value)
+                            || (0xAC00...0xD7AF).contains(scalar.value)
+                    })
+            }
+        case .chinese:
+            return text.filter { character in
+                character.isWhitespace
+                    || character.isNumber
+                    || character.unicodeScalars.contains(where: { scalar in
+                        (0x3400...0x4DBF).contains(scalar.value)
+                            || (0x4E00...0x9FFF).contains(scalar.value)
+                            || (0xF900...0xFAFF).contains(scalar.value)
+                    })
+            }
+        case .japanese:
+            return text.filter { character in
+                character.isWhitespace
+                    || character.isNumber
+                    || character.unicodeScalars.contains(where: { scalar in
+                        (0x3040...0x309F).contains(scalar.value)
+                            || (0x30A0...0x30FF).contains(scalar.value)
+                            || (0x4E00...0x9FFF).contains(scalar.value)
+                    })
+            }
+        case .kjv, .nkjv, .spanish, .german:
+            return text
+        }
+    }
+
+    private func localizedMessage(_ key: RecognitionMessageKey, translation: Translation) -> String {
+        switch (translation, key) {
+        case (.korean, .unavailable):
+            return "이 언어에서는 지금 음성 인식을 사용할 수 없습니다."
+        case (.korean, .permissionRequired):
+            return "음성 인식 권한이 필요합니다."
+        case (.chinese, .unavailable):
+            return "当前无法使用此语言的语音识别。"
+        case (.chinese, .permissionRequired):
+            return "需要语音识别权限。"
+        case (.japanese, .unavailable):
+            return "この言語では現在、音声認識を利用できません。"
+        case (.japanese, .permissionRequired):
+            return "音声認識の権限が必要です。"
+        case (.spanish, .unavailable):
+            return "El reconocimiento de voz no está disponible para este idioma ahora mismo."
+        case (.spanish, .permissionRequired):
+            return "Se requiere permiso para el reconocimiento de voz."
+        case (.german, .unavailable):
+            return "Die Spracherkennung ist für diese Sprache derzeit nicht verfügbar."
+        case (.german, .permissionRequired):
+            return "Für die Spracherkennung ist eine Berechtigung erforderlich."
+        case (_, .unavailable):
+            return "Speech recognition is unavailable for this language right now."
+        case (_, .permissionRequired):
+            return "Speech recognition permission is required."
+        }
+    }
+
+    private func scheduleSilenceTimeout() {
+        silenceGeneration += 1
+        let generation = silenceGeneration
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(5))
+            guard generation == self.silenceGeneration, self.isRecording else { return }
+            self.stop()
+        }
+    }
+
+    enum RecognitionError: Error {
+        case permissionDenied
+    }
+
+    private enum RecognitionMessageKey {
+        case unavailable
+        case permissionRequired
+    }
+
+    private static func audioLevel(from buffer: AVAudioPCMBuffer) -> Double {
+        guard let channelData = buffer.floatChannelData?[0] else { return 0 }
+        let frameLength = Int(buffer.frameLength)
+        guard frameLength > 0 else { return 0 }
+
+        var sum: Float = 0
+        for index in 0..<frameLength {
+            let sample = channelData[index]
+            sum += sample * sample
+        }
+
+        let rms = sqrt(sum / Float(frameLength))
+        return min(max(Double(rms) * 10, 0), 1)
     }
 }
 

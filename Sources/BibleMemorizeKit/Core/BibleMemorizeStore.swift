@@ -167,6 +167,27 @@ public final class BibleMemorizeStore {
         todaysSession = session
     }
 
+    public func moveCardToUpcoming(cardID: UUID) {
+        guard let index = cards.firstIndex(where: { $0.id == cardID }) else { return }
+        guard cards[index].nextReviewDate <= .now else { return }
+
+        let nextUpcomingDate = max(
+            Date().addingTimeInterval(3600),
+            (upcomingCards.last?.nextReviewDate ?? .now).addingTimeInterval(3600)
+        )
+        cards[index].nextReviewDate = nextUpcomingDate
+
+        if let session = todaysSession {
+            let remainingCards = session.prompts.compactMap { prompt in
+                cards.first(where: { $0.id == prompt.cardID && $0.nextReviewDate <= .now })
+            }
+
+            todaysSession = remainingCards.isEmpty
+                ? nil
+                : MemorizationSession(cards: remainingCards, translation: selectedTranslation)
+        }
+    }
+
     public func updateSelectedTranslation(_ translation: Translation) {
         selectedTranslation = translation
         if let session = todaysSession {
