@@ -1,4 +1,0 @@
-module BibleMemorizeKit {
-header "BibleMemorizeKit-Swift.h"
-export *
-}
