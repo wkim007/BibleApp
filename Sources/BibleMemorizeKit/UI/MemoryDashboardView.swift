@@ -1,6 +1,8 @@
 import SwiftUI
 import AVFoundation
+import MediaPlayer
 import Speech
+import UIKit
 
 public struct MemoryDashboardView: View {
     @State private var viewModel: DashboardViewModel
@@ -40,8 +42,18 @@ public struct MemoryDashboardView: View {
                     .padding(.top, 20)
                     .padding(.bottom, 32)
                 }
-                .navigationTitle("Bible Memorize")
                 .toolbar {
+                    ToolbarItem(placement: .principal) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "brain.head.profile")
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(.blue)
+
+                            Text("Bible Memorize")
+                                .font(.headline.weight(.semibold))
+                        }
+                    }
+
                     ToolbarItem(placement: .topBarTrailing) {
                         Button {
                             isShowingAddVerse = true
@@ -347,14 +359,14 @@ public struct MemoryDashboardView: View {
             }
 
             Button {
-                speaker.speak(
+                speaker.togglePlayback(
                     verseID: prompt.cardID,
                     text: prompt.promptText,
                     translation: viewModel.store.selectedTranslation,
                     speedMultiplier: viewModel.store.speechRateMultiplier
                 )
             } label: {
-                Image(systemName: "speaker.wave.2.fill")
+                Image(systemName: speaker.iconName(for: prompt.cardID))
                     .font(.headline)
             }
             .buttonStyle(.plain)
@@ -951,14 +963,14 @@ private struct VerseRow: View {
                     .accessibilityLabel("Edit verse")
 
                     Button {
-                        speaker.speak(
+                        speaker.togglePlayback(
                             verseID: card.id,
                             text: card.verse.text(for: translation),
                             translation: translation,
                             speedMultiplier: speedMultiplier
                         )
                     } label: {
-                        Image(systemName: "speaker.wave.2.fill")
+                        Image(systemName: speaker.iconName(for: card.id))
                             .font(.headline)
                     }
                     .buttonStyle(.plain)
@@ -1027,22 +1039,42 @@ private struct VerseRow: View {
 @MainActor
 private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     @Published private var repeatModes: [UUID: RepeatMode] = [:]
+    @Published private(set) var activeVerseID: UUID?
+    @Published private(set) var isPaused = false
 
     private let synthesizer = AVSpeechSynthesizer()
     private let audioSession = AVAudioSession.sharedInstance()
+    private let remoteCommandCenter = MPRemoteCommandCenter.shared()
     private var activePlayback: ActivePlayback?
 
     override init() {
         super.init()
         synthesizer.delegate = self
+        configureRemoteCommands()
     }
 
-    func speak(
+    func togglePlayback(
         verseID: UUID,
         text: String,
         translation: Translation,
         speedMultiplier: Double
     ) {
+        if activeVerseID == verseID {
+            if synthesizer.isPaused {
+                synthesizer.continueSpeaking()
+                isPaused = false
+                updateNowPlayingInfo()
+                return
+            }
+
+            if synthesizer.isSpeaking {
+                synthesizer.pauseSpeaking(at: .word)
+                isPaused = true
+                updateNowPlayingInfo()
+                return
+            }
+        }
+
         configureAudioSession()
 
         activePlayback = ActivePlayback(
@@ -1057,6 +1089,10 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
             synthesizer.stopSpeaking(at: .immediate)
         }
 
+        activeVerseID = verseID
+        isPaused = false
+        updateNowPlayingInfo()
+
         let utterance = makeUtterance(
             text: text,
             translation: translation,
@@ -1065,13 +1101,83 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
         synthesizer.speak(utterance)
     }
 
+    func iconName(for verseID: UUID) -> String {
+        guard activeVerseID == verseID else {
+            return "speaker.wave.2.fill"
+        }
+
+        return isPaused ? "play.fill" : "pause.fill"
+    }
+
     private func configureAudioSession() {
         do {
-            try audioSession.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+            try audioSession.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers, .allowBluetooth])
             try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+            UIApplication.shared.beginReceivingRemoteControlEvents()
         } catch {
-            assertionFailure("Failed to configure audio session for verse playback: \(error)")
+            do {
+                try audioSession.setCategory(.playback, mode: .default)
+                try audioSession.setActive(true)
+            } catch {
+                print("Failed to configure audio session for verse playback: \(error)")
+            }
         }
+    }
+
+    private func configureRemoteCommands() {
+        remoteCommandCenter.playCommand.isEnabled = true
+        remoteCommandCenter.pauseCommand.isEnabled = true
+        remoteCommandCenter.togglePlayPauseCommand.isEnabled = true
+
+        remoteCommandCenter.playCommand.addTarget { [weak self] _ in
+            self?.resumeFromRemoteControl() ?? .commandFailed
+        }
+
+        remoteCommandCenter.pauseCommand.addTarget { [weak self] _ in
+            self?.pauseFromRemoteControl() ?? .commandFailed
+        }
+
+        remoteCommandCenter.togglePlayPauseCommand.addTarget { [weak self] _ in
+            guard let self else { return .commandFailed }
+
+            if self.synthesizer.isPaused {
+                return self.resumeFromRemoteControl()
+            }
+
+            if self.synthesizer.isSpeaking {
+                return self.pauseFromRemoteControl()
+            }
+
+            return .commandFailed
+        }
+    }
+
+    private func pauseFromRemoteControl() -> MPRemoteCommandHandlerStatus {
+        guard synthesizer.isSpeaking else {
+            return .commandFailed
+        }
+
+        guard synthesizer.pauseSpeaking(at: .word) else {
+            return .commandFailed
+        }
+
+        isPaused = true
+        updateNowPlayingInfo()
+        return .success
+    }
+
+    private func resumeFromRemoteControl() -> MPRemoteCommandHandlerStatus {
+        guard synthesizer.isPaused else {
+            return .commandFailed
+        }
+
+        guard synthesizer.continueSpeaking() else {
+            return .commandFailed
+        }
+
+        isPaused = false
+        updateNowPlayingInfo()
+        return .success
     }
 
     func advanceRepeatMode(for verseID: UUID) {
@@ -1102,9 +1208,13 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
         switch playback.remainingLoops {
         case .off:
             activePlayback = nil
+            activeVerseID = nil
+            isPaused = false
+            clearNowPlayingInfo()
         case .once:
             playback.remainingLoops = .off
             activePlayback = playback
+            updateNowPlayingInfo()
             synthesizer.speak(
                 makeUtterance(
                     text: playback.text,
@@ -1115,6 +1225,7 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
         case .twice:
             playback.remainingLoops = .once
             activePlayback = playback
+            updateNowPlayingInfo()
             synthesizer.speak(
                 makeUtterance(
                     text: playback.text,
@@ -1124,6 +1235,7 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
             )
         case .infinite:
             activePlayback = playback
+            updateNowPlayingInfo()
             synthesizer.speak(
                 makeUtterance(
                     text: playback.text,
@@ -1132,6 +1244,42 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
                 )
             )
         }
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        activePlayback = nil
+        activeVerseID = nil
+        isPaused = false
+        clearNowPlayingInfo()
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didPause utterance: AVSpeechUtterance) {
+        isPaused = true
+        updateNowPlayingInfo()
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didContinue utterance: AVSpeechUtterance) {
+        isPaused = false
+        updateNowPlayingInfo()
+    }
+
+    private func updateNowPlayingInfo() {
+        guard let playback = activePlayback else {
+            clearNowPlayingInfo()
+            return
+        }
+
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = [
+            MPMediaItemPropertyTitle: "Bible Memorize",
+            MPMediaItemPropertyArtist: playback.translation.rawValue,
+            MPMediaItemPropertyAlbumTitle: "Verse Audio",
+            MPNowPlayingInfoPropertyPlaybackRate: NSNumber(value: isPaused ? 0 : 1)
+        ]
+    }
+
+    private func clearNowPlayingInfo() {
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        UIApplication.shared.endReceivingRemoteControlEvents()
     }
 
     private func makeUtterance(

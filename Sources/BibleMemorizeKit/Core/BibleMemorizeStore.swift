@@ -161,6 +161,9 @@ public final class BibleMemorizeStore {
         let placement = placement(for: assignmentType, excluding: cardID)
         cards[index].nextReviewDate = placement.nextReviewDate
         cards[index].sortOrder = placement.sortOrder
+        if assignmentType == .upcoming {
+            clearPassedState(for: cardID)
+        }
         rebuildSessionAfterCardStateChange()
     }
 
@@ -248,6 +251,7 @@ public final class BibleMemorizeStore {
         let placement = placement(for: .upcoming, excluding: cardID)
         cards[index].nextReviewDate = placement.nextReviewDate
         cards[index].sortOrder = placement.sortOrder
+        clearPassedState(for: cardID)
         rebuildSessionAfterCardStateChange()
     }
 
@@ -424,5 +428,9 @@ public final class BibleMemorizeStore {
             refreshedSession.markPassed(cardID: card.id)
         }
         todaysSession = refreshedSession
+    }
+
+    private func clearPassedState(for cardID: UUID) {
+        passedPromptIDs.remove(cardID)
     }
 }
