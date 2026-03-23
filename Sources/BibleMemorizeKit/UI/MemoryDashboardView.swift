@@ -174,19 +174,25 @@ public struct MemoryDashboardView: View {
 
                         controls(for: prompt, isPromptPassed: isPromptPassed)
                     }
-                    Text(recitationRecognizer.displayText(for: prompt))
-                        .foregroundStyle(isPromptPassed ? .green : .secondary)
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(recitationRecognizer.displayText(for: prompt))
+                                .foregroundStyle(isPromptPassed ? .green : .secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
 
-                    if recitationRecognizer.isRecording(for: prompt.cardID) || !recitationRecognizer.transcript(for: prompt.cardID).isEmpty {
-                        if recitationRecognizer.isRecording(for: prompt.cardID) {
-                            VoiceInputIndicator(level: recitationRecognizer.inputLevel(for: prompt.cardID))
+                            if recitationRecognizer.isRecording(for: prompt.cardID) || !recitationRecognizer.transcript(for: prompt.cardID).isEmpty {
+                                if recitationRecognizer.isRecording(for: prompt.cardID) {
+                                    VoiceInputIndicator(level: recitationRecognizer.inputLevel(for: prompt.cardID))
+                                }
+
+                                Text(recitationRecognizer.transcript(for: prompt.cardID))
+                                    .font(.subheadline)
+                                    .foregroundStyle(isPromptPassed ? .green : .primary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
                         }
-
-                        Text(recitationRecognizer.transcript(for: prompt.cardID))
-                            .font(.subheadline)
-                            .foregroundStyle(isPromptPassed ? .green : .primary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    .frame(maxHeight: 180)
 
                 }
                 .padding()
@@ -1033,10 +1039,13 @@ private struct VerseRow: View {
                     .accessibilityLabel("Delete verse")
                 }
             }
-            Text(card.verse.text(for: translation))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(3)
+            ScrollView {
+                Text(card.verse.text(for: translation))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: 110)
             Text("Translation: \(translation.rawValue)")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
