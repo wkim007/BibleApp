@@ -4,11 +4,19 @@ import Observation
 @MainActor
 @Observable
 public final class BibleMemorizeStore {
-    public private(set) var cards: [MemorizationCard]
-    public private(set) var collections: [MemorizationCollection]
+    public private(set) var cards: [MemorizationCard] {
+        didSet { persistState() }
+    }
+    public private(set) var collections: [MemorizationCollection] {
+        didSet { persistState() }
+    }
     public private(set) var todaysSession: MemorizationSession?
-    public var selectedTranslation: Translation
-    public var speechRateMultiplier: Double
+    public var selectedTranslation: Translation {
+        didSet { persistState() }
+    }
+    public var speechRateMultiplier: Double {
+        didSet { persistState() }
+    }
 
     private let scheduler: MemorizationScheduler
 
@@ -27,12 +35,21 @@ public final class BibleMemorizeStore {
     }
 
     public convenience init() {
-        self.init(
-            cards: SampleData.seedCards,
-            collections: SampleData.seedCollections,
-            selectedTranslation: .nkjv,
-            speechRateMultiplier: 1.0
-        )
+        if let snapshot = StorePersistence.loadSnapshot() {
+            self.init(
+                cards: snapshot.cards,
+                collections: snapshot.collections,
+                selectedTranslation: snapshot.selectedTranslation,
+                speechRateMultiplier: snapshot.speechRateMultiplier
+            )
+        } else {
+            self.init(
+                cards: SampleData.seedCards,
+                collections: SampleData.seedCollections,
+                selectedTranslation: .nkjv,
+                speechRateMultiplier: 1.0
+            )
+        }
     }
 
     public var dueCards: [MemorizationCard] {
@@ -131,5 +148,16 @@ public final class BibleMemorizeStore {
         let summary = session.makeSummary(finishedAt: reviewedAt)
         todaysSession = nil
         return summary
+    }
+
+    private func persistState() {
+        StorePersistence.saveSnapshot(
+            StoreSnapshot(
+                cards: cards,
+                collections: collections,
+                selectedTranslation: selectedTranslation,
+                speechRateMultiplier: speechRateMultiplier
+            )
+        )
     }
 }

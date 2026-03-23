@@ -4,6 +4,7 @@ import AVFoundation
 public struct MemoryDashboardView: View {
     @State private var viewModel: DashboardViewModel
     @StateObject private var speaker = VerseSpeaker()
+    @State private var isShowingAddVerse = false
 
     @MainActor
     public init(viewModel: DashboardViewModel) {
@@ -27,6 +28,18 @@ public struct MemoryDashboardView: View {
                     .padding(20)
                 }
                 .navigationTitle("Bible Memorize")
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            isShowingAddVerse = true
+                        } label: {
+                            Image(systemName: "plus")
+                        }
+                    }
+                }
+                .sheet(isPresented: $isShowingAddVerse) {
+                    AddVerseView(store: viewModel.store)
+                }
             }
             .tabItem {
                 Label("Review", systemImage: "book.closed")
@@ -178,6 +191,109 @@ public struct MemoryDashboardView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Repeat verse")
         }
+    }
+}
+
+private struct AddVerseView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var store: BibleMemorizeStore
+
+    @State private var book = ""
+    @State private var chapter = ""
+    @State private var verseStart = ""
+    @State private var verseEnd = ""
+    @State private var verseText = ""
+    @State private var tagsText = ""
+    @State private var difficulty: VerseDifficulty = .medium
+
+    private var isValid: Bool {
+        !book.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && Int(chapter).map { $0 > 0 } == true
+            && Int(verseStart).map { $0 > 0 } == true
+            && !verseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Reference") {
+                    TextField("Book", text: $book)
+                    TextField("Chapter", text: $chapter)
+                        .keyboardType(.numberPad)
+                    TextField("Verse Start", text: $verseStart)
+                        .keyboardType(.numberPad)
+                    TextField("Verse End (Optional)", text: $verseEnd)
+                        .keyboardType(.numberPad)
+                }
+
+                Section("Content") {
+                    HStack {
+                        Text("Translation")
+                        Spacer()
+                        Text(store.selectedTranslation.rawValue)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    TextField("Tags (comma separated)", text: $tagsText)
+
+                    Picker("Difficulty", selection: $difficulty) {
+                        ForEach(VerseDifficulty.allCases) { level in
+                            Text(level.rawValue.capitalized).tag(level)
+                        }
+                    }
+
+                    TextField("Verse Text", text: $verseText, axis: .vertical)
+                        .lineLimit(5...10)
+                }
+            }
+            .navigationTitle("Add Verse")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Save") {
+                        saveVerse()
+                    }
+                    .disabled(!isValid)
+                }
+            }
+        }
+    }
+
+    private func saveVerse() {
+        guard
+            let chapterValue = Int(chapter),
+            let verseStartValue = Int(verseStart),
+            chapterValue > 0,
+            verseStartValue > 0
+        else {
+            return
+        }
+
+        let verseEndValue = Int(verseEnd)
+        let tags = tagsText
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        store.addVerse(
+            reference: BibleReference(
+                book: book.trimmingCharacters(in: .whitespacesAndNewlines),
+                chapter: chapterValue,
+                verseStart: verseStartValue,
+                verseEnd: verseEndValue
+            ),
+            translation: store.selectedTranslation,
+            text: verseText.trimmingCharacters(in: .whitespacesAndNewlines),
+            tags: tags,
+            difficulty: difficulty
+        )
+
+        dismiss()
     }
 }
 
