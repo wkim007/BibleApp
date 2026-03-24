@@ -109,21 +109,32 @@ public struct MemoryDashboardView: View {
 
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Bible Memorize")
-                .font(.system(size: 36, weight: .black, design: .rounded))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.white, .cyan, .blue, .mint],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+            HStack(alignment: .center, spacing: 12) {
+                Text("Bible Memorize")
+                    .font(.system(size: 36, weight: .black, design: .rounded))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.white, .cyan, .blue, .mint],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                     )
-                )
-                .shadow(color: .cyan.opacity(isTitleGlowExpanded ? 0.45 : 0.18), radius: isTitleGlowExpanded ? 18 : 8)
-                .scaleEffect(isTitleGlowExpanded ? 1.015 : 0.985)
-                .animation(
-                    .easeInOut(duration: 1.6).repeatForever(autoreverses: true),
-                    value: isTitleGlowExpanded
-                )
+
+                if let headerLogo {
+                    headerLogo
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 34, height: 34)
+                        .foregroundStyle(Color.white)
+                }
+            }
+            .shadow(color: .cyan.opacity(isTitleGlowExpanded ? 0.45 : 0.18), radius: isTitleGlowExpanded ? 18 : 8)
+            .scaleEffect(isTitleGlowExpanded ? 1.015 : 0.985)
+            .animation(
+                .easeInOut(duration: 1.6).repeatForever(autoreverses: true),
+                value: isTitleGlowExpanded
+            )
 
             RoundedRectangle(cornerRadius: 999)
                 .fill(
@@ -135,6 +146,17 @@ public struct MemoryDashboardView: View {
                 )
                 .frame(width: 180, height: 4)
         }
+    }
+
+    private var headerLogo: Image? {
+        #if canImport(UIKit)
+        guard let uiImage = UIImage(contentsOfFile: "/Users/MacBook/Desktop/AI_Project/BibleApp/image/open-book_6747063.png") else {
+            return nil
+        }
+        return Image(uiImage: uiImage)
+        #else
+        return nil
+        #endif
     }
 
     private var statsSection: some View {
