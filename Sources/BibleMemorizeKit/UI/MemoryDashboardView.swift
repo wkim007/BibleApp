@@ -20,6 +20,7 @@ public struct MemoryDashboardView: View {
     @State private var isDueDropTargeted = false
     @State private var isUpcomingDropTargeted = false
     @State private var dueReorderTargetID: UUID?
+    @State private var isTitleGlowExpanded = false
 
     @MainActor
     public init(viewModel: DashboardViewModel) {
@@ -36,6 +37,7 @@ public struct MemoryDashboardView: View {
             NavigationStack {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
+                        headerSection
                         statsSection
 
                         dueSection
@@ -46,17 +48,6 @@ public struct MemoryDashboardView: View {
                     .padding(.bottom, 32)
                 }
                 .toolbar {
-                    ToolbarItem(placement: .principal) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "brain.head.profile")
-                                .font(.title3.weight(.semibold))
-                                .foregroundStyle(.blue)
-
-                            Text("Bible Memorize")
-                                .font(.headline.weight(.semibold))
-                        }
-                    }
-
                     ToolbarItem(placement: .primaryAction) {
                         Button {
                             isShowingAddVerse = true
@@ -108,6 +99,7 @@ public struct MemoryDashboardView: View {
         .preferredColorScheme(.dark)
         .onAppear {
             isMicPulseExpanded = true
+            isTitleGlowExpanded = true
             setIdleTimerDisabled(viewModel.store.keepScreenAwake)
         }
         .onChange(of: viewModel.store.keepScreenAwake) { _, keepAwake in
@@ -115,11 +107,38 @@ public struct MemoryDashboardView: View {
         }
     }
 
+    private var headerSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Bible Memorize")
+                .font(.system(size: 36, weight: .black, design: .rounded))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [.white, .cyan, .blue, .mint],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .shadow(color: .cyan.opacity(isTitleGlowExpanded ? 0.45 : 0.18), radius: isTitleGlowExpanded ? 18 : 8)
+                .scaleEffect(isTitleGlowExpanded ? 1.015 : 0.985)
+                .animation(
+                    .easeInOut(duration: 1.6).repeatForever(autoreverses: true),
+                    value: isTitleGlowExpanded
+                )
+
+            RoundedRectangle(cornerRadius: 999)
+                .fill(
+                    LinearGradient(
+                        colors: [.cyan.opacity(0.9), .blue.opacity(0.35), .clear],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: 180, height: 4)
+        }
+    }
+
     private var statsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Today")
-                .font(.headline)
-
             HStack(spacing: 12) {
                 StatCard(title: "Due", value: "\(viewModel.dueCount)")
                 StatCard(
