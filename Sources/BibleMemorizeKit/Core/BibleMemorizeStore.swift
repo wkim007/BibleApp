@@ -244,6 +244,32 @@ public final class BibleMemorizeStore {
         todaysSession = session
     }
 
+    public func recordPassedReviewIfNeeded(cardID: UUID, elapsedSeconds: TimeInterval) {
+        guard !passedPromptIDs.contains(cardID),
+              let index = cards.firstIndex(where: { $0.id == cardID }) else {
+            return
+        }
+
+        let existingNextReviewDate = cards[index].nextReviewDate
+        let existingSortOrder = cards[index].sortOrder
+        let reviewedAt = Date()
+
+        var updatedCard = scheduler.updatedCard(
+            from: cards[index],
+            with: .effortless,
+            reviewedAt: reviewedAt,
+            elapsedSeconds: elapsedSeconds
+        )
+        updatedCard.nextReviewDate = existingNextReviewDate
+        updatedCard.sortOrder = existingSortOrder
+        cards[index] = updatedCard
+
+        passedPromptIDs.insert(cardID)
+        guard var session = todaysSession else { return }
+        session.markPassed(cardID: cardID)
+        todaysSession = session
+    }
+
     public func resetPromptPassed(cardID: UUID) {
         passedPromptIDs.remove(cardID)
         guard var session = todaysSession else { return }
@@ -262,6 +288,20 @@ public final class BibleMemorizeStore {
                 session.resetPassed(cardID: cardID)
             }
             todaysSession = session
+        }
+    }
+
+    public func resetProgressData() {
+        passedPromptIDs.removeAll()
+        todaysSession = nil
+
+        for index in cards.indices {
+            cards[index].intervalDays = 0
+            cards[index].easeFactor = 2.5
+            cards[index].consecutiveSuccesses = 0
+            cards[index].lapses = 0
+            cards[index].lastReviewedAt = nil
+            cards[index].reviewHistory = []
         }
     }
 

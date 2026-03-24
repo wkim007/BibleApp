@@ -124,8 +124,11 @@ public struct MemoryDashboardView: View {
                 StatCard(title: "Due", value: "\(viewModel.dueCount)")
                 StatCard(title: "Pass", value: "\(viewModel.passCount)") {
                     if viewModel.passCount > 0 {
-                        recitationRecognizer.resetCurrentReview()
                         viewModel.store.resetAllPassedPrompts()
+                        recitationRecognizer.resetCurrentReview()
+                        if let prompt = viewModel.store.todaysSession?.currentPrompt {
+                            updateMicHighlight(for: prompt.cardID, isPassed: false)
+                        }
                     }
                 }
                 StatCard(title: "Progress", value: "\(Int(viewModel.reviewCompletion * 100))%")
@@ -221,9 +224,12 @@ public struct MemoryDashboardView: View {
                 }
                 .onChange(of: recitationRecognizer.isComplete(for: prompt.cardID)) { _, isComplete in
                     if isComplete {
-                        viewModel.store.markPromptPassed(cardID: prompt.cardID)
+                        viewModel.store.recordPassedReviewIfNeeded(
+                            cardID: prompt.cardID,
+                            elapsedSeconds: recitationRecognizer.elapsedSeconds(for: prompt.cardID)
+                        )
                         highlightedMicPromptID = nil
-                    } else {
+                    } else if !viewModel.store.isPromptPassed(prompt.cardID) {
                         viewModel.store.resetPromptPassed(cardID: prompt.cardID)
                         updateMicHighlight(for: prompt.cardID, isPassed: false)
                     }
@@ -779,6 +785,7 @@ private struct AddVerseView: View {
 
 private struct SettingsView: View {
     @Bindable var store: BibleMemorizeStore
+    @State private var isShowingResetProgressConfirmation = false
 
     var body: some View {
         Form {
@@ -883,8 +890,32 @@ private struct SettingsView: View {
                         .foregroundStyle(store.openAIValidationState == .valid ? .green : .secondary)
                 }
             }
+
+            Section("Progress") {
+                Button(role: .destructive) {
+                    isShowingResetProgressConfirmation = true
+                } label: {
+                    Text("Reset Progress")
+                }
+
+                Text("This clears review history, mastery, streaks, and passed state, but keeps your verses.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
         }
         .navigationTitle("Settings")
+        .confirmationDialog(
+            "Reset all progress data?",
+            isPresented: $isShowingResetProgressConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("OK", role: .destructive) {
+                store.resetProgressData()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("All review history, mastery, streaks, and pass progress will be removed.")
+        }
     }
 
     private func adjustSpeechRate(by delta: Double) {
@@ -1008,6 +1039,10 @@ private struct VerseRow: View {
     let onDelete: () -> Void
     @State private var isShowingDeleteConfirmation = false
 
+    private var successfulPassCount: Int {
+        card.reviewHistory.filter { $0.grade.rawValue >= RecallGrade.correct.rawValue }.count
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top) {
@@ -1017,13 +1052,14 @@ private struct VerseRow: View {
                 Spacer()
 
                 HStack(spacing: 14) {
-                    if isPassed {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.subheadline.weight(.bold))
+                    if isPassed || successfulPassCount > 0 {
+                        Text("\(successfulPassCount)")
+                            .font(.caption.bold())
                             .foregroundStyle(.white)
-                            .frame(width: 24, height: 24)
+                            .frame(minWidth: 24, minHeight: 24)
+                            .padding(.horizontal, successfulPassCount >= 10 ? 6 : 0)
                             .background(.green)
-                            .clipShape(Circle())
+                            .clipShape(Capsule())
                     }
 
                     Button(action: onEdit) {
@@ -1603,6 +1639,7 @@ private final class VerseRecitationRecognizer: NSObject, ObservableObject {
         var targetText: String
         var maskedWords: [String]
         var translation: Translation
+        var startedAt: Date?
         var transcript: String = ""
         var isComplete = false
         var recognitionScore: Double = 0
@@ -1658,6 +1695,14 @@ private final class VerseRecitationRecognizer: NSObject, ObservableObject {
         currentState?.verseID == verseID ? currentState?.inputLevel ?? 0 : 0
     }
 
+    func elapsedSeconds(for verseID: UUID) -> TimeInterval {
+        guard currentState?.verseID == verseID,
+              let startedAt = currentState?.startedAt else {
+            return 0
+        }
+        return max(0, Date().timeIntervalSince(startedAt))
+    }
+
     func displayText(for prompt: SessionPrompt) -> String {
         guard currentState?.verseID == prompt.cardID else {
             return prompt.maskedWords.joined(separator: " ")
@@ -1704,10 +1749,13 @@ private final class VerseRecitationRecognizer: NSObject, ObservableObject {
 
     func resetCurrentReview() {
         stop()
-        currentState?.transcript = ""
-        currentState?.isComplete = false
-        currentState?.recognitionScore = 0
-        currentState?.inputLevel = 0
+        guard let state = currentState else { return }
+        currentState = RecognitionState(
+            verseID: state.verseID,
+            targetText: state.targetText,
+            maskedWords: state.maskedWords,
+            translation: state.translation
+        )
     }
 
     private func start() async {
@@ -1749,6 +1797,7 @@ private final class VerseRecitationRecognizer: NSObject, ObservableObject {
             audioEngine.prepare()
             try audioEngine.start()
             isRecording = true
+            currentState?.startedAt = .now
             scheduleSilenceTimeout()
 
             recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in

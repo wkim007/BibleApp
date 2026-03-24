@@ -11,6 +11,7 @@ public struct ProgressView: View {
     private var masterySnapshots: [VerseMasterySnapshot] {
         store.cards
             .map { ProgressAnalytics.masteryScore(for: $0, translation: store.selectedTranslation) }
+            .filter { $0.reviewCount > 0 }
             .sorted { $0.masteryScore > $1.masteryScore }
     }
 
@@ -32,7 +33,9 @@ public struct ProgressView: View {
     }
 
     private var memorizedCount: Int {
-        masterySnapshots.filter { $0.masteryScore >= 0.75 }.count
+        store.cards.filter { card in
+            card.reviewHistory.filter { $0.grade.rawValue >= RecallGrade.correct.rawValue }.count >= 3
+        }.count
     }
 
     private var averageMastery: Double {
@@ -115,21 +118,25 @@ public struct ProgressView: View {
             Text("Per-Verse Mastery")
                 .font(.headline)
 
-            Chart(masterySnapshots.prefix(6)) { snapshot in
-                BarMark(
-                    x: .value("Mastery", snapshot.masteryScore),
-                    y: .value("Verse", snapshot.reference)
-                )
-                .foregroundStyle(by: .value("Mastery", snapshot.masteryScore))
-                .cornerRadius(6)
-            }
-            .frame(height: CGFloat(max(180, masterySnapshots.prefix(6).count * 44)))
-            .chartXScale(domain: 0...1)
-            .chartXAxis {
-                AxisMarks(values: [0, 0.25, 0.5, 0.75, 1.0]) { value in
-                    AxisValueLabel {
-                        if let number = value.as(Double.self) {
-                            Text("\(Int(number * 100))%")
+            if masterySnapshots.isEmpty {
+                emptyProgressState("No mastery data yet.")
+            } else {
+                Chart(masterySnapshots.prefix(6)) { snapshot in
+                    BarMark(
+                        x: .value("Mastery", snapshot.masteryScore),
+                        y: .value("Verse", snapshot.reference)
+                    )
+                    .foregroundStyle(by: .value("Mastery", snapshot.masteryScore))
+                    .cornerRadius(6)
+                }
+                .frame(height: CGFloat(max(180, masterySnapshots.prefix(6).count * 44)))
+                .chartXScale(domain: 0...1)
+                .chartXAxis {
+                    AxisMarks(values: [0, 0.25, 0.5, 0.75, 1.0]) { value in
+                        AxisValueLabel {
+                            if let number = value.as(Double.self) {
+                                Text("\(Int(number * 100))%")
+                            }
                         }
                     }
                 }
@@ -145,31 +152,35 @@ public struct ProgressView: View {
             Text("Mastery Snapshot")
                 .font(.headline)
 
-            ForEach(Array(masterySnapshots.prefix(5))) { snapshot in
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(snapshot.reference)
-                            .font(.headline)
-                        Text("\(snapshot.reviewCount) review\(snapshot.reviewCount == 1 ? "" : "s")")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text("\(Int(snapshot.masteryScore * 100))%")
-                            .font(.headline)
-                        if let lastReviewedAt = snapshot.lastReviewedAt {
-                            Text(lastReviewedAt, style: .date)
-                                .font(.caption)
+            if masterySnapshots.isEmpty {
+                emptyProgressState("No mastery snapshots yet.")
+            } else {
+                ForEach(Array(masterySnapshots.prefix(5))) { snapshot in
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(snapshot.reference)
+                                .font(.headline)
+                            Text("\(snapshot.reviewCount) review\(snapshot.reviewCount == 1 ? "" : "s")")
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
+
+                        Spacer()
+
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text("\(Int(snapshot.masteryScore * 100))%")
+                                .font(.headline)
+                            if let lastReviewedAt = snapshot.lastReviewedAt {
+                                Text(lastReviewedAt, style: .date)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
+                    .padding()
+                    .background(.thinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
                 }
-                .padding()
-                .background(.thinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
             }
         }
     }
@@ -179,31 +190,45 @@ public struct ProgressView: View {
             Text("Recent Reviews")
                 .font(.headline)
 
-            ForEach(Array(reviewRecords.prefix(6))) { record in
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(reference(for: record.verseID))
-                            .font(.headline)
-                        Text(record.reviewedAt, style: .date)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+            if reviewRecords.isEmpty {
+                emptyProgressState("No review history yet.")
+            } else {
+                ForEach(Array(reviewRecords.prefix(6))) { record in
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(reference(for: record.verseID))
+                                .font(.headline)
+                            Text(record.reviewedAt, style: .date)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
 
-                    Spacer()
+                        Spacer()
 
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text(gradeLabel(record.grade))
-                            .font(.subheadline.weight(.semibold))
-                        Text("\(Int(record.elapsedSeconds))s")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text(gradeLabel(record.grade))
+                                .font(.subheadline.weight(.semibold))
+                            Text("\(Int(record.elapsedSeconds))s")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
+                    .padding()
+                    .background(.thinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
                 }
-                .padding()
-                .background(.thinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
             }
         }
+    }
+
+    private func emptyProgressState(_ message: String) -> some View {
+        Text(message)
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
+            .background(.thinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
     private func gradeLabel(_ grade: RecallGrade) -> String {
