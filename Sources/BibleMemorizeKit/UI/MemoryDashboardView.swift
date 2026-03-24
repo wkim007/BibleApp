@@ -2,7 +2,9 @@ import SwiftUI
 import AVFoundation
 import MediaPlayer
 import Speech
+#if canImport(UIKit)
 import UIKit
+#endif
 
 public struct MemoryDashboardView: View {
     @State private var viewModel: DashboardViewModel
@@ -55,7 +57,7 @@ public struct MemoryDashboardView: View {
                         }
                     }
 
-                    ToolbarItem(placement: .topBarTrailing) {
+                    ToolbarItem(placement: .primaryAction) {
                         Button {
                             isShowingAddVerse = true
                         } label: {
@@ -106,10 +108,10 @@ public struct MemoryDashboardView: View {
         .preferredColorScheme(.dark)
         .onAppear {
             isMicPulseExpanded = true
-            UIApplication.shared.isIdleTimerDisabled = viewModel.store.keepScreenAwake
+            setIdleTimerDisabled(viewModel.store.keepScreenAwake)
         }
         .onChange(of: viewModel.store.keepScreenAwake) { _, keepAwake in
-            UIApplication.shared.isIdleTimerDisabled = keepAwake
+            setIdleTimerDisabled(keepAwake)
         }
     }
 
@@ -526,6 +528,12 @@ public struct MemoryDashboardView: View {
     }
 }
 
+private func setIdleTimerDisabled(_ isDisabled: Bool) {
+    #if canImport(UIKit)
+    UIApplication.shared.isIdleTimerDisabled = isDisabled
+    #endif
+}
+
 private struct VoiceInputIndicator: View {
     let level: Double
 
@@ -557,6 +565,7 @@ private struct VoiceInputIndicator: View {
 private struct AddVerseView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var store: BibleMemorizeStore
+    @StateObject private var dictationRecorder = VerseDictationRecorder()
 
     @State private var selectedTranslation: Translation = .nkjv
     @State private var selectedBook: BibleBook = .john
@@ -651,19 +660,45 @@ private struct AddVerseView: View {
                         }
                     }
 
-                    TextField("Verse Text", text: $verseText, axis: .vertical)
-                        .lineLimit(5...10)
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("Verse Text")
+                            Spacer()
+                            if dictationRecorder.isRecording {
+                                VoiceInputIndicator(level: dictationRecorder.inputLevel)
+                                    .frame(width: 140)
+                            }
+                            Button {
+                                dictationRecorder.toggleRecording(translation: selectedTranslation)
+                            } label: {
+                                Image(systemName: dictationRecorder.isRecording ? "waveform.circle.fill" : "mic.circle.fill")
+                                    .font(.title3)
+                                    .foregroundStyle(dictationRecorder.isRecording ? .red : .blue)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(dictationRecorder.isRecording ? "Stop voice input" : "Start voice input")
+                        }
+
+                        TextField("Verse Text", text: $verseText, axis: .vertical)
+                            .lineLimit(5...10)
+
+                        if let statusMessage = dictationRecorder.statusMessage {
+                            Text(statusMessage)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
             }
             .navigationTitle("Add Verse")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
                     }
                 }
 
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         saveVerse()
                     }
@@ -674,6 +709,9 @@ private struct AddVerseView: View {
         .onAppear {
             selectedTranslation = store.selectedTranslation
             normalizeReferenceSelection()
+        }
+        .onDisappear {
+            dictationRecorder.stop()
         }
         .onChange(of: selectedBook) { _, _ in
             normalizeReferenceSelection()
@@ -691,6 +729,9 @@ private struct AddVerseView: View {
                 selectedVerseEnd = max(selectedVerseEnd, selectedVerseStart)
                 normalizeReferenceSelection()
             }
+        }
+        .onChange(of: dictationRecorder.transcript) { _, transcript in
+            verseText = transcript
         }
     }
 
@@ -826,7 +867,6 @@ private struct SettingsView: View {
                 ))
 
                 SecureField("OpenAI API Key", text: $store.openAIAPIKey)
-                    .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .disabled(!store.isOpenAIEnabled)
 
@@ -941,13 +981,13 @@ private struct EditVerseView: View {
             }
             .navigationTitle("Edit Verse")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
                     }
                 }
 
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         onSave()
                     }
@@ -1077,7 +1117,9 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
     @Published private(set) var isPaused = false
 
     private let synthesizer = AVSpeechSynthesizer()
+    #if os(iOS)
     private let audioSession = AVAudioSession.sharedInstance()
+    #endif
     private let remoteCommandCenter = MPRemoteCommandCenter.shared()
     private var activePlayback: ActivePlayback?
 
@@ -1144,10 +1186,13 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
     }
 
     private func configureAudioSession() {
+        #if os(iOS)
         do {
             try audioSession.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers, .allowBluetooth])
             try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+            #if canImport(UIKit)
             UIApplication.shared.beginReceivingRemoteControlEvents()
+            #endif
         } catch {
             do {
                 try audioSession.setCategory(.playback, mode: .default)
@@ -1156,6 +1201,7 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
                 print("Failed to configure audio session for verse playback: \(error)")
             }
         }
+        #endif
     }
 
     private func configureRemoteCommands() {
@@ -1313,7 +1359,9 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
 
     private func clearNowPlayingInfo() {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        #if canImport(UIKit)
         UIApplication.shared.endReceivingRemoteControlEvents()
+        #endif
     }
 
     private func makeUtterance(
@@ -1327,6 +1375,224 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
         let scaledRate = AVSpeechUtteranceDefaultSpeechRate * Float(normalizedMultiplier)
         utterance.rate = min(max(scaledRate, AVSpeechUtteranceMinimumSpeechRate), AVSpeechUtteranceMaximumSpeechRate)
         return utterance
+    }
+}
+
+@MainActor
+private final class VerseDictationRecorder: NSObject, ObservableObject {
+    private enum DictationMessageKey {
+        case unavailable
+        case permissionRequired
+    }
+
+    private enum DictationError: Error {
+        case permissionDenied
+    }
+
+    @Published private(set) var transcript = ""
+    @Published private(set) var isRecording = false
+    @Published private(set) var statusMessage: String?
+    @Published private(set) var inputLevel: Double = 0
+
+    private let audioEngine = AVAudioEngine()
+    private var speechRecognizer: SFSpeechRecognizer?
+    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    private var recognitionTask: SFSpeechRecognitionTask?
+    private var currentTranslation: Translation = .nkjv
+
+    func toggleRecording(translation: Translation) {
+        if isRecording {
+            stop()
+        } else {
+            transcript = ""
+            statusMessage = nil
+            currentTranslation = translation
+            Task {
+                await start()
+            }
+        }
+    }
+
+    func stop() {
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        recognitionRequest?.endAudio()
+        recognitionRequest = nil
+
+        if audioEngine.isRunning {
+            audioEngine.stop()
+            audioEngine.inputNode.removeTap(onBus: 0)
+        }
+
+        isRecording = false
+        inputLevel = 0
+    }
+
+    private func start() async {
+        do {
+            try await requestPermissions()
+
+            let locale = Locale(identifier: currentTranslation.speechLanguageCode)
+            guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable else {
+                statusMessage = localizedMessage(.unavailable, translation: currentTranslation)
+                return
+            }
+
+            speechRecognizer = recognizer
+            recognitionTask?.cancel()
+            recognitionTask = nil
+
+            #if os(iOS)
+            #if os(iOS)
+            #if os(iOS)
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.record, mode: .measurement, options: [.duckOthers])
+            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+            #endif
+            #endif
+            #endif
+
+            let request = SFSpeechAudioBufferRecognitionRequest()
+            request.shouldReportPartialResults = true
+            request.requiresOnDeviceRecognition = false
+            recognitionRequest = request
+
+            let inputNode = audioEngine.inputNode
+            inputNode.removeTap(onBus: 0)
+            inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputNode.outputFormat(forBus: 0)) { [weak self] buffer, _ in
+                let level = Self.audioLevel(from: buffer)
+                Task { @MainActor in
+                    self?.inputLevel = level
+                }
+                self?.recognitionRequest?.append(buffer)
+            }
+
+            audioEngine.prepare()
+            try audioEngine.start()
+            isRecording = true
+
+            recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+                Task { @MainActor in
+                    guard let self else { return }
+
+                    if let result {
+                        self.transcript = self.sanitizeTranscript(result.bestTranscription.formattedString, translation: self.currentTranslation)
+                        if result.isFinal {
+                            self.stop()
+                        }
+                    } else if error != nil {
+                        self.statusMessage = self.localizedMessage(.permissionRequired, translation: self.currentTranslation)
+                        self.stop()
+                    }
+                }
+            }
+        } catch {
+            statusMessage = localizedMessage(.permissionRequired, translation: currentTranslation)
+            stop()
+        }
+    }
+
+    private func requestPermissions() async throws {
+        let speechStatus = await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { status in
+                continuation.resume(returning: status)
+            }
+        }
+
+        guard speechStatus == .authorized else {
+            throw DictationError.permissionDenied
+        }
+
+        let micGranted = await withCheckedContinuation { continuation in
+            AVAudioApplication.requestRecordPermission { granted in
+                continuation.resume(returning: granted)
+            }
+        }
+
+        guard micGranted else {
+            throw DictationError.permissionDenied
+        }
+    }
+
+    private func sanitizeTranscript(_ text: String, translation: Translation) -> String {
+        switch translation {
+        case .korean:
+            return text.filter { character in
+                character.isWhitespace
+                    || character.isNumber
+                    || character.unicodeScalars.contains(where: { scalar in
+                        (0x1100...0x11FF).contains(scalar.value)
+                            || (0x3130...0x318F).contains(scalar.value)
+                            || (0xAC00...0xD7AF).contains(scalar.value)
+                    })
+            }
+        case .chinese:
+            return text.filter { character in
+                character.isWhitespace
+                    || character.isNumber
+                    || character.unicodeScalars.contains(where: { scalar in
+                        (0x3400...0x4DBF).contains(scalar.value)
+                            || (0x4E00...0x9FFF).contains(scalar.value)
+                            || (0xF900...0xFAFF).contains(scalar.value)
+                    })
+            }
+        case .japanese:
+            return text.filter { character in
+                character.isWhitespace
+                    || character.isNumber
+                    || character.unicodeScalars.contains(where: { scalar in
+                        (0x3040...0x309F).contains(scalar.value)
+                            || (0x30A0...0x30FF).contains(scalar.value)
+                            || (0x4E00...0x9FFF).contains(scalar.value)
+                    })
+            }
+        case .kjv, .nkjv, .spanish, .german:
+            return text
+        }
+    }
+
+    private func localizedMessage(_ key: DictationMessageKey, translation: Translation) -> String {
+        switch (translation, key) {
+        case (.korean, .unavailable):
+            return "이 언어에서는 지금 음성 인식을 사용할 수 없습니다."
+        case (.korean, .permissionRequired):
+            return "음성 인식 권한이 필요합니다."
+        case (.chinese, .unavailable):
+            return "当前无法使用此语言的语音识别。"
+        case (.chinese, .permissionRequired):
+            return "需要语音识别权限。"
+        case (.japanese, .unavailable):
+            return "この言語では現在、音声認識を利用できません。"
+        case (.japanese, .permissionRequired):
+            return "音声認識の権限が必要です。"
+        case (.spanish, .unavailable):
+            return "El reconocimiento de voz no está disponible para este idioma ahora mismo."
+        case (.spanish, .permissionRequired):
+            return "Se requiere permiso para el reconocimiento de voz."
+        case (.german, .unavailable):
+            return "Die Spracherkennung ist für diese Sprache derzeit nicht verfügbar."
+        case (.german, .permissionRequired):
+            return "Für die Spracherkennung ist eine Berechtigung erforderlich."
+        case (_, .unavailable):
+            return "Speech recognition is unavailable for this language right now."
+        case (_, .permissionRequired):
+            return "Speech recognition permission is required."
+        }
+    }
+
+    private static func audioLevel(from buffer: AVAudioPCMBuffer) -> Double {
+        guard let channelData = buffer.floatChannelData else { return 0 }
+        let channel = channelData[0]
+        let frameLength = Int(buffer.frameLength)
+        guard frameLength > 0 else { return 0 }
+
+        var sum: Float = 0
+        for index in 0..<frameLength {
+            sum += channel[index] * channel[index]
+        }
+
+        let rms = sqrt(sum / Float(frameLength))
+        return min(max(Double(rms) * 8, 0), 1)
     }
 }
 
@@ -1459,9 +1725,11 @@ private final class VerseRecitationRecognizer: NSObject, ObservableObject {
             recognitionTask?.cancel()
             recognitionTask = nil
 
+            #if os(iOS)
             let audioSession = AVAudioSession.sharedInstance()
             try audioSession.setCategory(.record, mode: .measurement, options: [.duckOthers])
             try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+            #endif
 
             let request = SFSpeechAudioBufferRecognitionRequest()
             request.shouldReportPartialResults = true
