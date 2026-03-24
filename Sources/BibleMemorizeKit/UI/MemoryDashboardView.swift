@@ -122,7 +122,11 @@ public struct MemoryDashboardView: View {
 
             HStack(spacing: 12) {
                 StatCard(title: "Due", value: "\(viewModel.dueCount)")
-                StatCard(title: "Pass", value: "\(viewModel.passCount)") {
+                StatCard(
+                    title: "Pass",
+                    value: "\(viewModel.passCount)",
+                    isActionHighlighted: viewModel.passCount > 0
+                ) {
                     if viewModel.passCount > 0 {
                         viewModel.store.resetAllPassedPrompts()
                         recitationRecognizer.resetCurrentReview()
@@ -934,11 +938,13 @@ private extension Double {
 private struct StatCard: View {
     let title: String
     let value: String
+    let isActionHighlighted: Bool
     let action: (() -> Void)?
 
-    init(title: String, value: String, action: (() -> Void)? = nil) {
+    init(title: String, value: String, isActionHighlighted: Bool = false, action: (() -> Void)? = nil) {
         self.title = title
         self.value = value
+        self.isActionHighlighted = isActionHighlighted
         self.action = action
     }
 
@@ -958,14 +964,30 @@ private struct StatCard: View {
             if let action {
                 Button(action: action) {
                     Image(systemName: "arrow.counterclockwise.circle.fill")
-                        .font(.subheadline.weight(.bold))
+                        .font(.title3.weight(.bold))
                         .foregroundStyle(.white)
-                        .frame(width: 24, height: 24)
-                        .background(Color.white.opacity(0.14))
+                        .frame(width: 34, height: 34)
+                        .background(
+                            isActionHighlighted
+                            ? Color.blue.opacity(0.95)
+                            : Color.white.opacity(0.14)
+                        )
                         .clipShape(Circle())
+                        .overlay {
+                            Circle()
+                                .stroke(
+                                    isActionHighlighted ? Color.cyan.opacity(0.9) : .clear,
+                                    lineWidth: 1.5
+                                )
+                        }
+                        .shadow(
+                            color: isActionHighlighted ? Color.blue.opacity(0.45) : .clear,
+                            radius: 10
+                        )
+                        .scaleEffect(isActionHighlighted ? 1.08 : 1.0)
                 }
                 .buttonStyle(.plain)
-                .padding(10)
+                .padding(8)
             }
         }
     }
