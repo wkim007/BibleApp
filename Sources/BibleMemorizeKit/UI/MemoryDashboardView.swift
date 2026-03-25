@@ -1043,6 +1043,7 @@ private struct StatCard: View {
 
 private struct EditVerseView: View {
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var dictationRecorder = VerseDictationRecorder()
 
     let reference: BibleReference
     @Binding var translation: Translation
@@ -1076,8 +1077,34 @@ private struct EditVerseView: View {
                         }
                     }
 
-                    TextEditor(text: $verseText)
-                        .frame(minHeight: 220)
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("Verse Text")
+                            Spacer()
+                            if dictationRecorder.isRecording {
+                                VoiceInputIndicator(level: dictationRecorder.inputLevel)
+                                    .frame(width: 140)
+                            }
+                            Button {
+                                dictationRecorder.toggleRecording(translation: translation)
+                            } label: {
+                                Image(systemName: dictationRecorder.isRecording ? "waveform.circle.fill" : "mic.circle.fill")
+                                    .font(.title3)
+                                    .foregroundStyle(dictationRecorder.isRecording ? .red : .blue)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(dictationRecorder.isRecording ? "Stop voice input" : "Start voice input")
+                        }
+
+                        TextEditor(text: $verseText)
+                            .frame(minHeight: 220)
+
+                        if let statusMessage = dictationRecorder.statusMessage {
+                            Text(statusMessage)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
             }
             .navigationTitle("Edit Verse")
@@ -1090,11 +1117,21 @@ private struct EditVerseView: View {
 
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
+                        dictationRecorder.persistRecordingIfNeeded(
+                            translation: translation,
+                            reference: reference
+                        )
                         onSave()
                     }
                     .disabled(!isValid)
                 }
             }
+        }
+        .onDisappear {
+            dictationRecorder.stop()
+        }
+        .onChange(of: dictationRecorder.transcript) { _, transcript in
+            verseText = transcript
         }
     }
 }
