@@ -810,18 +810,25 @@ private struct AddVerseView: View {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
 
+        let reference = BibleReference(
+            book: selectedBook.rawValue,
+            chapter: selectedChapter,
+            verseStart: selectedVerseStart,
+            verseEnd: selectedVerseEndEnabled ? selectedVerseEnd : nil
+        )
+
         store.addVerse(
-            reference: BibleReference(
-                book: selectedBook.rawValue,
-                chapter: selectedChapter,
-                verseStart: selectedVerseStart,
-                verseEnd: selectedVerseEndEnabled ? selectedVerseEnd : nil
-            ),
+            reference: reference,
             translation: selectedTranslation,
             text: verseText.trimmingCharacters(in: .whitespacesAndNewlines),
             tags: tags,
             difficulty: difficulty,
             assignmentType: assignmentType
+        )
+
+        dictationRecorder.persistRecordingIfNeeded(
+            translation: selectedTranslation,
+            reference: reference
         )
 
         dismiss()
@@ -1106,6 +1113,13 @@ private struct VerseRow: View {
         card.reviewHistory.filter { $0.grade.rawValue >= RecallGrade.correct.rawValue }.count
     }
 
+    private var recordedVoiceURL: URL? {
+        VerseRecordingStore.recordingURL(
+            translation: translation,
+            reference: card.verse.reference
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top) {
@@ -1131,6 +1145,20 @@ private struct VerseRow: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Edit verse")
+
+                    if let recordedVoiceURL {
+                        Button {
+                            speaker.toggleRecordedPlayback(
+                                verseID: card.id,
+                                recordingURL: recordedVoiceURL
+                            )
+                        } label: {
+                            Image(systemName: speaker.recordedAudioIconName(for: card.id))
+                                .font(.headline)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Play recorded voice")
+                    }
 
                     Button {
                         speaker.togglePlayback(
@@ -1210,17 +1238,19 @@ private struct VerseRow: View {
 }
 
 @MainActor
-private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
+private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDelegate {
     @Published private var repeatModes: [UUID: RepeatMode] = [:]
     @Published private(set) var activeVerseID: UUID?
     @Published private(set) var isPaused = false
 
     private let synthesizer = AVSpeechSynthesizer()
+    private var audioPlayer: AVAudioPlayer?
     #if os(iOS)
     private let audioSession = AVAudioSession.sharedInstance()
     #endif
     private let remoteCommandCenter = MPRemoteCommandCenter.shared()
     private var activePlayback: ActivePlayback?
+    private var activeRecordingPlayback: ActiveRecordingPlayback?
 
     override init() {
         super.init()
@@ -1234,6 +1264,8 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
         translation: Translation,
         speedMultiplier: Double
     ) {
+        stopRecordedPlayback()
+
         if activeVerseID == verseID {
             if synthesizer.isPaused {
                 synthesizer.continueSpeaking()
@@ -1276,12 +1308,62 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
         synthesizer.speak(utterance)
     }
 
+    func toggleRecordedPlayback(verseID: UUID, recordingURL: URL) {
+        configureAudioSession()
+
+        if activeVerseID == verseID, let audioPlayer {
+            if audioPlayer.isPlaying {
+                audioPlayer.pause()
+                isPaused = true
+                updateNowPlayingInfoForRecording(url: recordingURL)
+                return
+            }
+
+            audioPlayer.play()
+            isPaused = false
+            updateNowPlayingInfoForRecording(url: recordingURL)
+            return
+        }
+
+        if synthesizer.isSpeaking || synthesizer.isPaused {
+            synthesizer.stopSpeaking(at: .immediate)
+        }
+        activePlayback = nil
+        stopRecordedPlayback()
+
+        do {
+            let player = try AVAudioPlayer(contentsOf: recordingURL)
+            player.delegate = self
+            player.prepareToPlay()
+            player.play()
+            audioPlayer = player
+            activeRecordingPlayback = ActiveRecordingPlayback(
+                verseID: verseID,
+                url: recordingURL,
+                remainingLoops: repeatModes[verseID] ?? .off
+            )
+            activeVerseID = verseID
+            isPaused = false
+            updateNowPlayingInfoForRecording(url: recordingURL)
+        } catch {
+            print("Failed to play recorded verse audio: \(error)")
+        }
+    }
+
     func iconName(for verseID: UUID) -> String {
         guard activeVerseID == verseID else {
             return "speaker.wave.2.fill"
         }
 
         return isPaused ? "play.fill" : "pause.fill"
+    }
+
+    func recordedAudioIconName(for verseID: UUID) -> String {
+        guard activeVerseID == verseID, audioPlayer != nil else {
+            return "waveform"
+        }
+
+        return isPaused ? "play.circle.fill" : "pause.circle.fill"
     }
 
     private func configureAudioSession() {
@@ -1333,6 +1415,15 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
 
     private func pauseFromRemoteControl() -> MPRemoteCommandHandlerStatus {
         guard synthesizer.isSpeaking else {
+            if let audioPlayer, audioPlayer.isPlaying {
+                audioPlayer.pause()
+                isPaused = true
+                if let recordingURL = activeRecordingPlayback?.url {
+                    updateNowPlayingInfoForRecording(url: recordingURL)
+                }
+                return .success
+            }
+
             return .commandFailed
         }
 
@@ -1347,6 +1438,15 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
 
     private func resumeFromRemoteControl() -> MPRemoteCommandHandlerStatus {
         guard synthesizer.isPaused else {
+            if let audioPlayer, !audioPlayer.isPlaying, activeRecordingPlayback != nil {
+                audioPlayer.play()
+                isPaused = false
+                if let recordingURL = activeRecordingPlayback?.url {
+                    updateNowPlayingInfoForRecording(url: recordingURL)
+                }
+                return .success
+            }
+
             return .commandFailed
         }
 
@@ -1365,6 +1465,10 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
 
         if activePlayback?.verseID == verseID {
             activePlayback?.remainingLoops = nextMode
+        }
+
+        if activeRecordingPlayback?.verseID == verseID {
+            activeRecordingPlayback?.remainingLoops = nextMode
         }
     }
 
@@ -1429,7 +1533,30 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
         activePlayback = nil
         activeVerseID = nil
         isPaused = false
+        stopRecordedPlayback()
         clearNowPlayingInfo()
+    }
+
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        guard var playback = activeRecordingPlayback else { return }
+
+        switch playback.remainingLoops {
+        case .off:
+            activeRecordingPlayback = nil
+            stopRecordedPlayback()
+            clearNowPlayingInfo()
+        case .once:
+            playback.remainingLoops = .off
+            activeRecordingPlayback = playback
+            replayRecordedPlayback(playback)
+        case .twice:
+            playback.remainingLoops = .once
+            activeRecordingPlayback = playback
+            replayRecordedPlayback(playback)
+        case .infinite:
+            activeRecordingPlayback = playback
+            replayRecordedPlayback(playback)
+        }
     }
 
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didPause utterance: AVSpeechUtterance) {
@@ -1461,6 +1588,42 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
         #if canImport(UIKit)
         UIApplication.shared.endReceivingRemoteControlEvents()
         #endif
+    }
+
+    private func updateNowPlayingInfoForRecording(url: URL) {
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = [
+            MPMediaItemPropertyTitle: url.deletingPathExtension().lastPathComponent,
+            MPMediaItemPropertyArtist: "Recorded Verse",
+            MPNowPlayingInfoPropertyPlaybackRate: NSNumber(value: isPaused ? 0 : 1)
+        ]
+    }
+
+    private func stopRecordedPlayback() {
+        audioPlayer?.stop()
+        audioPlayer = nil
+        activeRecordingPlayback = nil
+        if activePlayback == nil {
+            activeVerseID = nil
+            isPaused = false
+        }
+    }
+
+    private func replayRecordedPlayback(_ playback: ActiveRecordingPlayback) {
+        do {
+            let player = try AVAudioPlayer(contentsOf: playback.url)
+            player.delegate = self
+            player.prepareToPlay()
+            player.play()
+            audioPlayer = player
+            activeVerseID = playback.verseID
+            isPaused = false
+            updateNowPlayingInfoForRecording(url: playback.url)
+        } catch {
+            activeRecordingPlayback = nil
+            stopRecordedPlayback()
+            clearNowPlayingInfo()
+            print("Failed to replay recorded verse audio: \(error)")
+        }
     }
 
     private func makeUtterance(
@@ -1498,6 +1661,8 @@ private final class VerseDictationRecorder: NSObject, ObservableObject {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var currentTranslation: Translation = .nkjv
+    private var recordingURL: URL?
+    private var recordingFile: AVAudioFile?
 
     func toggleRecording(translation: Translation) {
         if isRecording {
@@ -1517,6 +1682,7 @@ private final class VerseDictationRecorder: NSObject, ObservableObject {
         recognitionTask = nil
         recognitionRequest?.endAudio()
         recognitionRequest = nil
+        recordingFile = nil
 
         if audioEngine.isRunning {
             audioEngine.stop()
@@ -1557,13 +1723,22 @@ private final class VerseDictationRecorder: NSObject, ObservableObject {
             recognitionRequest = request
 
             let inputNode = audioEngine.inputNode
+            let format = inputNode.outputFormat(forBus: 0)
+            let temporaryRecordingURL = VerseRecordingStore.makeTemporaryRecordingURL()
+            recordingURL = temporaryRecordingURL
+            recordingFile = try AVAudioFile(forWriting: temporaryRecordingURL, settings: format.settings)
             inputNode.removeTap(onBus: 0)
-            inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputNode.outputFormat(forBus: 0)) { [weak self] buffer, _ in
+            inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
                 let level = Self.audioLevel(from: buffer)
                 Task { @MainActor in
                     self?.inputLevel = level
                 }
                 self?.recognitionRequest?.append(buffer)
+                do {
+                    try self?.recordingFile?.write(from: buffer)
+                } catch {
+                    print("Failed to write verse recording buffer: \(error)")
+                }
             }
 
             audioEngine.prepare()
@@ -1692,6 +1867,26 @@ private final class VerseDictationRecorder: NSObject, ObservableObject {
 
         let rms = sqrt(sum / Float(frameLength))
         return min(max(Double(rms) * 8, 0), 1)
+    }
+
+    func persistRecordingIfNeeded(translation: Translation, reference: BibleReference) {
+        guard let recordingURL,
+              FileManager.default.fileExists(atPath: recordingURL.path) else {
+            return
+        }
+
+        let destinationURL = VerseRecordingStore.destinationURL(
+            translation: translation,
+            reference: reference
+        )
+
+        do {
+            try VerseRecordingStore.replaceRecording(at: destinationURL, withTemporaryFileAt: recordingURL)
+            self.recordingURL = destinationURL
+        } catch {
+            statusMessage = "Could not save voice recording."
+            print("Failed to persist verse recording: \(error)")
+        }
     }
 }
 
@@ -2146,4 +2341,66 @@ private struct ActivePlayback {
     let translation: Translation
     let speedMultiplier: Double
     var remainingLoops: RepeatMode
+}
+
+private struct ActiveRecordingPlayback {
+    let verseID: UUID
+    let url: URL
+    var remainingLoops: RepeatMode
+}
+
+private enum VerseRecordingStore {
+    static func recordingURL(translation: Translation, reference: BibleReference) -> URL? {
+        let destinationURL = destinationURL(translation: translation, reference: reference)
+        return FileManager.default.fileExists(atPath: destinationURL.path) ? destinationURL : nil
+    }
+
+    static func destinationURL(translation: Translation, reference: BibleReference) -> URL {
+        recordingsDirectory.appendingPathComponent(fileName(translation: translation, reference: reference))
+    }
+
+    static func makeTemporaryRecordingURL() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("caf")
+    }
+
+    static func replaceRecording(at destinationURL: URL, withTemporaryFileAt temporaryURL: URL) throws {
+        try FileManager.default.createDirectory(at: recordingsDirectory, withIntermediateDirectories: true)
+        if FileManager.default.fileExists(atPath: destinationURL.path) {
+            try FileManager.default.removeItem(at: destinationURL)
+        }
+        try FileManager.default.moveItem(at: temporaryURL, to: destinationURL)
+    }
+
+    private static var recordingsDirectory: URL {
+        let baseDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return baseDirectory.appendingPathComponent("VerseRecordings", isDirectory: true)
+    }
+
+    private static func fileName(translation: Translation, reference: BibleReference) -> String {
+        var components = [
+            sanitize(translation.rawValue),
+            sanitize(reference.book),
+            "\(reference.chapter)",
+            "\(reference.verseStart)"
+        ]
+
+        if let verseEnd = reference.verseEnd {
+            components.append("\(verseEnd)")
+        }
+
+        return components.joined(separator: "_") + ".caf"
+    }
+
+    private static func sanitize(_ value: String) -> String {
+        let replaced = value.replacingOccurrences(of: "\\s+", with: "_", options: .regularExpression)
+        let filtered = replaced.unicodeScalars.map { scalar -> Character in
+            CharacterSet.alphanumerics.contains(scalar) ? Character(String(scalar)) : "_"
+        }
+        return String(filtered)
+            .replacingOccurrences(of: "_+", with: "_", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+    }
 }
