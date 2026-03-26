@@ -720,14 +720,25 @@ private struct AddVerseView: View {
                                     .frame(width: 140)
                             }
                             Button {
+                                dictationRecorder.reset()
+                            } label: {
+                                Image(systemName: "arrow.counterclockwise.circle.fill")
+                                    .font(.title3)
+                                    .foregroundStyle(dictationRecorder.canReset ? .orange : .secondary.opacity(0.5))
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!dictationRecorder.canReset)
+                            .accessibilityLabel("Reset voice input")
+
+                            Button {
                                 dictationRecorder.toggleRecording(translation: selectedTranslation)
                             } label: {
-                                Image(systemName: dictationRecorder.isRecording ? "waveform.circle.fill" : "mic.circle.fill")
+                                Image(systemName: dictationRecorder.isRecording ? "pause.circle.fill" : "mic.circle.fill")
                                     .font(.title3)
                                     .foregroundStyle(dictationRecorder.isRecording ? .red : .blue)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(dictationRecorder.isRecording ? "Stop voice input" : "Start voice input")
+                            .accessibilityLabel(dictationRecorder.isRecording ? "Pause voice input" : (dictationRecorder.isPaused ? "Resume voice input" : "Start voice input"))
                         }
 
                         TextField("Verse Text", text: $verseText, axis: .vertical)
@@ -1690,6 +1701,7 @@ private final class VerseDictationRecorder: NSObject, ObservableObject {
 
     @Published private(set) var transcript = ""
     @Published private(set) var isRecording = false
+    @Published private(set) var isPaused = false
     @Published private(set) var statusMessage: String?
     @Published private(set) var inputLevel: Double = 0
 
@@ -1700,12 +1712,16 @@ private final class VerseDictationRecorder: NSObject, ObservableObject {
     private var currentTranslation: Translation = .nkjv
     private var recordingURL: URL?
     private var recordingFile: AVAudioFile?
+    private var accumulatedTranscript = ""
+
+    var canReset: Bool {
+        isRecording || isPaused || !transcript.isEmpty || recordingURL != nil
+    }
 
     func toggleRecording(translation: Translation) {
         if isRecording {
-            stop()
+            pause()
         } else {
-            transcript = ""
             statusMessage = nil
             currentTranslation = translation
             Task {
@@ -1719,7 +1735,6 @@ private final class VerseDictationRecorder: NSObject, ObservableObject {
         recognitionTask = nil
         recognitionRequest?.endAudio()
         recognitionRequest = nil
-        recordingFile = nil
 
         if audioEngine.isRunning {
             audioEngine.stop()
@@ -1727,6 +1742,36 @@ private final class VerseDictationRecorder: NSObject, ObservableObject {
         }
 
         isRecording = false
+        isPaused = false
+        inputLevel = 0
+    }
+
+    func reset() {
+        stop()
+        recordingFile = nil
+        if let recordingURL, FileManager.default.fileExists(atPath: recordingURL.path) {
+            try? FileManager.default.removeItem(at: recordingURL)
+        }
+        self.recordingURL = nil
+        accumulatedTranscript = ""
+        transcript = ""
+        statusMessage = nil
+    }
+
+    private func pause() {
+        accumulatedTranscript = transcript
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        recognitionRequest?.endAudio()
+        recognitionRequest = nil
+
+        if audioEngine.isRunning {
+            audioEngine.stop()
+            audioEngine.inputNode.removeTap(onBus: 0)
+        }
+
+        isRecording = false
+        isPaused = true
         inputLevel = 0
     }
 
@@ -1761,9 +1806,12 @@ private final class VerseDictationRecorder: NSObject, ObservableObject {
 
             let inputNode = audioEngine.inputNode
             let format = inputNode.outputFormat(forBus: 0)
-            let temporaryRecordingURL = VerseRecordingStore.makeTemporaryRecordingURL()
-            recordingURL = temporaryRecordingURL
-            recordingFile = try AVAudioFile(forWriting: temporaryRecordingURL, settings: format.settings)
+            if recordingURL == nil {
+                recordingURL = VerseRecordingStore.makeTemporaryRecordingURL()
+            }
+            if recordingFile == nil, let recordingURL {
+                recordingFile = try AVAudioFile(forWriting: recordingURL, settings: format.settings)
+            }
             inputNode.removeTap(onBus: 0)
             inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
                 let level = Self.audioLevel(from: buffer)
@@ -1781,15 +1829,18 @@ private final class VerseDictationRecorder: NSObject, ObservableObject {
             audioEngine.prepare()
             try audioEngine.start()
             isRecording = true
+            isPaused = false
 
             recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
                 Task { @MainActor in
                     guard let self else { return }
 
                     if let result {
-                        self.transcript = self.sanitizeTranscript(result.bestTranscription.formattedString, translation: self.currentTranslation)
+                        let segmentTranscript = self.sanitizeTranscript(result.bestTranscription.formattedString, translation: self.currentTranslation)
+                        self.transcript = self.combinedTranscript(with: segmentTranscript)
                         if result.isFinal {
-                            self.stop()
+                            self.accumulatedTranscript = self.transcript
+                            self.pause()
                         }
                     } else if error != nil {
                         self.statusMessage = self.localizedMessage(.permissionRequired, translation: self.currentTranslation)
@@ -1907,8 +1958,11 @@ private final class VerseDictationRecorder: NSObject, ObservableObject {
     }
 
     func persistRecordingIfNeeded(translation: Translation, reference: BibleReference) {
-        guard let recordingURL,
-              FileManager.default.fileExists(atPath: recordingURL.path) else {
+        if isRecording {
+            pause()
+        }
+
+        guard let recordingURL, FileManager.default.fileExists(atPath: recordingURL.path) else {
             return
         }
 
@@ -1918,12 +1972,26 @@ private final class VerseDictationRecorder: NSObject, ObservableObject {
         )
 
         do {
+            recordingFile = nil
             try VerseRecordingStore.replaceRecording(at: destinationURL, withTemporaryFileAt: recordingURL)
-            self.recordingURL = destinationURL
+            self.recordingURL = nil
         } catch {
             statusMessage = "Could not save voice recording."
             print("Failed to persist verse recording: \(error)")
         }
+    }
+
+    private func combinedTranscript(with segment: String) -> String {
+        let trimmedBase = accumulatedTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedSegment = segment.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if trimmedBase.isEmpty {
+            return trimmedSegment
+        }
+        if trimmedSegment.isEmpty {
+            return trimmedBase
+        }
+        return "\(trimmedBase) \(trimmedSegment)"
     }
 }
 
@@ -2408,6 +2476,51 @@ private enum VerseRecordingStore {
             try FileManager.default.removeItem(at: destinationURL)
         }
         try FileManager.default.moveItem(at: temporaryURL, to: destinationURL)
+    }
+
+    static func mergeRecordings(at destinationURL: URL, segmentURLs: [URL]) throws {
+        let existingSegmentURLs = segmentURLs.filter { FileManager.default.fileExists(atPath: $0.path) }
+        guard let firstSegmentURL = existingSegmentURLs.first else {
+            return
+        }
+
+        try FileManager.default.createDirectory(at: recordingsDirectory, withIntermediateDirectories: true)
+        if FileManager.default.fileExists(atPath: destinationURL.path) {
+            try FileManager.default.removeItem(at: destinationURL)
+        }
+
+        let firstSegmentFile = try AVAudioFile(forReading: firstSegmentURL)
+        let destinationFile = try AVAudioFile(
+            forWriting: destinationURL,
+            settings: firstSegmentFile.fileFormat.settings,
+            commonFormat: firstSegmentFile.processingFormat.commonFormat,
+            interleaved: firstSegmentFile.processingFormat.isInterleaved
+        )
+
+        try appendAudio(from: firstSegmentFile, to: destinationFile)
+
+        for segmentURL in existingSegmentURLs.dropFirst() {
+            let segmentFile = try AVAudioFile(forReading: segmentURL)
+            try appendAudio(from: segmentFile, to: destinationFile)
+        }
+    }
+
+    private static func appendAudio(from sourceFile: AVAudioFile, to destinationFile: AVAudioFile) throws {
+        let format = sourceFile.processingFormat
+        let frameCapacity = AVAudioFrameCount(max(1024, min(sourceFile.length, 4096)))
+
+        while true {
+            guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCapacity) else {
+                break
+            }
+
+            try sourceFile.read(into: buffer)
+            guard buffer.frameLength > 0 else {
+                break
+            }
+
+            try destinationFile.write(from: buffer)
+        }
     }
 
     private static var recordingsDirectory: URL {
