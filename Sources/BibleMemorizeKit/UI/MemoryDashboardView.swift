@@ -1312,22 +1312,26 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
         translation: Translation,
         speedMultiplier: Double
     ) {
-        stopRecordedPlayback()
-
-        if activeVerseID == verseID {
-            if synthesizer.isPaused {
-                synthesizer.continueSpeaking()
-                isPaused = false
-                updateNowPlayingInfo()
-                return
+        if activePlayback?.verseID == verseID {
+            if isPaused || synthesizer.isPaused {
+                if synthesizer.continueSpeaking() {
+                    isPaused = false
+                    updateNowPlayingInfo()
+                    return
+                }
             }
 
             if synthesizer.isSpeaking {
-                synthesizer.pauseSpeaking(at: .word)
-                isPaused = true
-                updateNowPlayingInfo()
-                return
+                if synthesizer.pauseSpeaking(at: .word) {
+                    isPaused = true
+                    updateNowPlayingInfo()
+                    return
+                }
             }
+        }
+
+        if activeRecordingPlayback != nil {
+            stopRecordedPlayback()
         }
 
         configureAudioSession()
@@ -1399,7 +1403,7 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
     }
 
     func iconName(for verseID: UUID) -> String {
-        guard activeVerseID == verseID else {
+        guard activePlayback?.verseID == verseID else {
             return "speaker.wave.2.fill"
         }
 
