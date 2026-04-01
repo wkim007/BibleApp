@@ -5,6 +5,8 @@ struct StoreSnapshot: Codable {
     var collections: [MemorizationCollection]
     var passedPromptIDs: Set<UUID>
     var selectedTranslation: Translation
+    var preferredVoiceIdentifiersByTranslation: [Translation: String]
+    var reviewLevel: ReviewLevel
     var speechRateMultiplier: Double
     var keepScreenAwake: Bool
     var openAIEnabled: Bool
@@ -15,6 +17,8 @@ struct StoreSnapshot: Codable {
         case collections
         case passedPromptIDs
         case selectedTranslation
+        case preferredVoiceIdentifiersByTranslation
+        case reviewLevel
         case speechRateMultiplier
         case keepScreenAwake
         case openAIEnabled
@@ -26,6 +30,8 @@ struct StoreSnapshot: Codable {
         collections: [MemorizationCollection],
         passedPromptIDs: Set<UUID>,
         selectedTranslation: Translation,
+        preferredVoiceIdentifiersByTranslation: [Translation: String],
+        reviewLevel: ReviewLevel,
         speechRateMultiplier: Double,
         keepScreenAwake: Bool,
         openAIEnabled: Bool,
@@ -35,6 +41,8 @@ struct StoreSnapshot: Codable {
         self.collections = collections
         self.passedPromptIDs = passedPromptIDs
         self.selectedTranslation = selectedTranslation
+        self.preferredVoiceIdentifiersByTranslation = preferredVoiceIdentifiersByTranslation
+        self.reviewLevel = reviewLevel
         self.speechRateMultiplier = speechRateMultiplier
         self.keepScreenAwake = keepScreenAwake
         self.openAIEnabled = openAIEnabled
@@ -47,6 +55,8 @@ struct StoreSnapshot: Codable {
         collections = try container.decode([MemorizationCollection].self, forKey: .collections)
         passedPromptIDs = try container.decodeIfPresent(Set<UUID>.self, forKey: .passedPromptIDs) ?? []
         selectedTranslation = try container.decode(Translation.self, forKey: .selectedTranslation)
+        preferredVoiceIdentifiersByTranslation = try container.decodeIfPresent([Translation: String].self, forKey: .preferredVoiceIdentifiersByTranslation) ?? [:]
+        reviewLevel = try container.decodeIfPresent(ReviewLevel.self, forKey: .reviewLevel) ?? .standard
         speechRateMultiplier = try container.decode(Double.self, forKey: .speechRateMultiplier)
         keepScreenAwake = try container.decodeIfPresent(Bool.self, forKey: .keepScreenAwake) ?? false
         openAIEnabled = try container.decode(Bool.self, forKey: .openAIEnabled)

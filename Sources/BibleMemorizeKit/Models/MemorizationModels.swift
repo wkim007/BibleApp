@@ -77,6 +77,14 @@ public enum VerseAssignmentType: String, Codable, CaseIterable, Identifiable, Se
     public var id: String { rawValue }
 }
 
+public enum ReviewLevel: String, Codable, CaseIterable, Identifiable, Sendable {
+    case standard = "Standard"
+    case medium = "Medium"
+    case hard = "Hard"
+
+    public var id: String { rawValue }
+}
+
 public struct MemoryVerse: Identifiable, Codable, Hashable, Sendable {
     public let id: UUID
     public var reference: BibleReference

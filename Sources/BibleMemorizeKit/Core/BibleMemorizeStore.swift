@@ -17,6 +17,15 @@ public final class BibleMemorizeStore {
     public var selectedTranslation: Translation {
         didSet { persistState() }
     }
+    public var preferredVoiceIdentifiersByTranslation: [Translation: String] {
+        didSet { persistState() }
+    }
+    public var reviewLevel: ReviewLevel {
+        didSet {
+            persistState()
+            refreshSessionForCurrentSettings()
+        }
+    }
     public var speechRateMultiplier: Double {
         didSet { persistState() }
     }
@@ -52,6 +61,8 @@ public final class BibleMemorizeStore {
         collections: [MemorizationCollection],
         passedPromptIDs: Set<UUID> = [],
         selectedTranslation: Translation = .nkjv,
+        preferredVoiceIdentifiersByTranslation: [Translation: String] = [:],
+        reviewLevel: ReviewLevel = .standard,
         speechRateMultiplier: Double = 0.9,
         keepScreenAwake: Bool = false,
         isOpenAIEnabled: Bool = false,
@@ -64,6 +75,8 @@ public final class BibleMemorizeStore {
         self.collections = collections
         self.passedPromptIDs = passedPromptIDs
         self.selectedTranslation = selectedTranslation
+        self.preferredVoiceIdentifiersByTranslation = preferredVoiceIdentifiersByTranslation
+        self.reviewLevel = reviewLevel
         self.speechRateMultiplier = speechRateMultiplier
         self.keepScreenAwake = keepScreenAwake
         self.isOpenAIEnabled = isOpenAIEnabled
@@ -81,6 +94,8 @@ public final class BibleMemorizeStore {
                 collections: snapshot.collections,
                 passedPromptIDs: snapshot.passedPromptIDs,
                 selectedTranslation: snapshot.selectedTranslation,
+                preferredVoiceIdentifiersByTranslation: snapshot.preferredVoiceIdentifiersByTranslation,
+                reviewLevel: snapshot.reviewLevel,
                 speechRateMultiplier: snapshot.speechRateMultiplier,
                 keepScreenAwake: snapshot.keepScreenAwake,
                 isOpenAIEnabled: snapshot.openAIEnabled,
@@ -93,6 +108,8 @@ public final class BibleMemorizeStore {
                 collections: SampleData.seedCollections,
                 passedPromptIDs: [],
                 selectedTranslation: .nkjv,
+                preferredVoiceIdentifiersByTranslation: [:],
+                reviewLevel: .standard,
                 speechRateMultiplier: 0.9,
                 keepScreenAwake: false,
                 isOpenAIEnabled: false,
@@ -199,7 +216,7 @@ public final class BibleMemorizeStore {
             if remainingCards.isEmpty {
                 todaysSession = nil
             } else {
-                todaysSession = MemorizationSession(cards: remainingCards, translation: selectedTranslation)
+                todaysSession = MemorizationSession(cards: remainingCards, translation: selectedTranslation, reviewLevel: reviewLevel)
             }
         }
     }
@@ -210,7 +227,7 @@ public final class BibleMemorizeStore {
             todaysSession = nil
             return
         }
-        var session = MemorizationSession(cards: sessionCards, translation: selectedTranslation)
+        var session = MemorizationSession(cards: sessionCards, translation: selectedTranslation, reviewLevel: reviewLevel)
         for card in sessionCards where passedPromptIDs.contains(card.id) {
             session.markPassed(cardID: card.id)
         }
@@ -351,11 +368,24 @@ public final class BibleMemorizeStore {
         if remainingCards.isEmpty {
             todaysSession = nil
         } else {
-            var refreshedSession = MemorizationSession(cards: remainingCards, translation: translation)
+            var refreshedSession = MemorizationSession(cards: remainingCards, translation: translation, reviewLevel: reviewLevel)
             for card in remainingCards where passedPromptIDs.contains(card.id) {
                 refreshedSession.markPassed(cardID: card.id)
             }
             todaysSession = refreshedSession
+        }
+    }
+
+    public func preferredVoiceIdentifier(for translation: Translation) -> String? {
+        preferredVoiceIdentifiersByTranslation[translation]
+    }
+
+    public func updatePreferredVoiceIdentifier(_ identifier: String?, for translation: Translation) {
+        let trimmed = identifier?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if trimmed.isEmpty {
+            preferredVoiceIdentifiersByTranslation.removeValue(forKey: translation)
+        } else {
+            preferredVoiceIdentifiersByTranslation[translation] = trimmed
         }
     }
 
@@ -443,6 +473,8 @@ public final class BibleMemorizeStore {
                 collections: collections,
                 passedPromptIDs: passedPromptIDs,
                 selectedTranslation: selectedTranslation,
+                preferredVoiceIdentifiersByTranslation: preferredVoiceIdentifiersByTranslation,
+                reviewLevel: reviewLevel,
                 speechRateMultiplier: speechRateMultiplier,
                 keepScreenAwake: keepScreenAwake,
                 openAIEnabled: isOpenAIEnabled,
@@ -489,8 +521,23 @@ public final class BibleMemorizeStore {
             return
         }
 
-        var refreshedSession = MemorizationSession(cards: refreshedCards, translation: selectedTranslation)
+        var refreshedSession = MemorizationSession(cards: refreshedCards, translation: selectedTranslation, reviewLevel: reviewLevel)
         for card in refreshedCards where passedPromptIDs.contains(card.id) {
+            refreshedSession.markPassed(cardID: card.id)
+        }
+        todaysSession = refreshedSession
+    }
+
+    private func refreshSessionForCurrentSettings() {
+        guard todaysSession != nil else { return }
+        let remainingCards = dueCards
+        if remainingCards.isEmpty {
+            todaysSession = nil
+            return
+        }
+
+        var refreshedSession = MemorizationSession(cards: remainingCards, translation: selectedTranslation, reviewLevel: reviewLevel)
+        for card in remainingCards where passedPromptIDs.contains(card.id) {
             refreshedSession.markPassed(cardID: card.id)
         }
         todaysSession = refreshedSession

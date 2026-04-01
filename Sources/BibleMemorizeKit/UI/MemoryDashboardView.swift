@@ -21,6 +21,7 @@ public struct MemoryDashboardView: View {
     @State private var isUpcomingDropTargeted = false
     @State private var dueReorderTargetID: UUID?
     @State private var isTitleGlowExpanded = false
+    @State private var answerRevealPromptID: UUID?
 
     @MainActor
     public init(viewModel: DashboardViewModel) {
@@ -191,7 +192,14 @@ public struct MemoryDashboardView: View {
                 }
 
                 Button {
+                    if viewModel.store.todaysSession == nil {
+                        viewModel.store.resetAllPassedPrompts()
+                        recitationRecognizer.resetCurrentReview()
+                    }
                     viewModel.store.toggleSession()
+                    if let prompt = viewModel.store.todaysSession?.currentPrompt {
+                        updateMicHighlight(for: prompt.cardID, isPassed: false)
+                    }
                 } label: {
                     Image(systemName: viewModel.store.todaysSession == nil ? "play.circle.fill" : "eye.slash.circle.fill")
                         .font(.system(size: 32, weight: .semibold))
@@ -226,7 +234,7 @@ public struct MemoryDashboardView: View {
                     }
                     ScrollView {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text(recitationRecognizer.displayText(for: prompt))
+                            Text(answerRevealPromptID == prompt.cardID ? prompt.promptText : recitationRecognizer.displayText(for: prompt))
                                 .foregroundStyle(isPromptPassed ? .green : .secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -294,6 +302,7 @@ public struct MemoryDashboardView: View {
                     translation: viewModel.store.selectedTranslation,
                     speaker: speaker,
                     speedMultiplier: viewModel.store.speechRateMultiplier,
+                    preferredVoiceIdentifier: viewModel.store.preferredVoiceIdentifier(for: viewModel.store.selectedTranslation),
                     isPassed: viewModel.store.isPromptPassed(card.id),
                     onEdit: {
                         beginEditing(card)
@@ -364,6 +373,7 @@ public struct MemoryDashboardView: View {
                     translation: viewModel.store.selectedTranslation,
                     speaker: speaker,
                     speedMultiplier: viewModel.store.speechRateMultiplier,
+                    preferredVoiceIdentifier: viewModel.store.preferredVoiceIdentifier(for: viewModel.store.selectedTranslation),
                     isPassed: false,
                     onEdit: {
                         beginEditing(card)
@@ -413,21 +423,26 @@ public struct MemoryDashboardView: View {
         let shouldHighlightMic = highlightedMicPromptID == prompt.cardID && !isPromptPassed
 
         HStack(spacing: 14) {
-            if isPromptPassed {
-                Image(systemName: "checkmark.circle.fill")
+            Button {
+                revealAnswer(for: prompt.cardID)
+            } label: {
+                Image(systemName: "lightbulb.fill")
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(.white)
                     .frame(width: 24, height: 24)
-                    .background(.green)
+                    .background(isPromptPassed ? .green : .blue)
                     .clipShape(Circle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Show answer")
 
             Button {
                 speaker.togglePlayback(
                     verseID: prompt.cardID,
                     text: prompt.promptText,
                     translation: viewModel.store.selectedTranslation,
-                    speedMultiplier: viewModel.store.speechRateMultiplier
+                    speedMultiplier: viewModel.store.speechRateMultiplier,
+                    preferredVoiceIdentifier: viewModel.store.preferredVoiceIdentifier(for: viewModel.store.selectedTranslation)
                 )
             } label: {
                 Image(systemName: speaker.iconName(for: prompt.cardID))
@@ -500,6 +515,19 @@ public struct MemoryDashboardView: View {
 
         viewModel.store.moveCardToUpcoming(cardID: cardID)
         return true
+    }
+
+    private func revealAnswer(for promptID: UUID) {
+        answerRevealPromptID = promptID
+
+        Task {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            await MainActor.run {
+                if answerRevealPromptID == promptID {
+                    answerRevealPromptID = nil
+                }
+            }
+        }
     }
 
     private func handleDueDrop(items: [String]) -> Bool {
@@ -850,6 +878,14 @@ private struct SettingsView: View {
     @Bindable var store: BibleMemorizeStore
     @State private var isShowingResetProgressConfirmation = false
 
+    private var availableVoiceOptions: [PreferredVoiceOption] {
+        VerseSpeaker.availableVoiceOptions(for: store.selectedTranslation)
+    }
+
+    private var selectedVoiceIdentifier: String {
+        store.preferredVoiceIdentifier(for: store.selectedTranslation) ?? PreferredVoiceOption.systemDefault.id
+    }
+
     var body: some View {
         Form {
             Section("Bible") {
@@ -867,6 +903,28 @@ private struct SettingsView: View {
                 .pickerStyle(.menu)
 
                 Text("All verses in the app follow the selected Bible version.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Preferred Voice") {
+                Picker(
+                    "Voice",
+                    selection: Binding(
+                        get: { selectedVoiceIdentifier },
+                        set: { newValue in
+                            let identifier = newValue == PreferredVoiceOption.systemDefault.id ? nil : newValue
+                            store.updatePreferredVoiceIdentifier(identifier, for: store.selectedTranslation)
+                        }
+                    )
+                ) {
+                    ForEach(availableVoiceOptions) { option in
+                        Text(option.displayName).tag(option.id)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                Text("Choose the installed voice used for the selected Bible version. System Default uses Apple’s standard voice for that language.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -923,6 +981,17 @@ private struct SettingsView: View {
             }
 
             Section("Display") {
+                Picker("Review Level", selection: $store.reviewLevel) {
+                    ForEach(ReviewLevel.allCases) { level in
+                        Text(level.rawValue).tag(level)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                Text("Standard uses the current hiding pattern, Medium hides about 80% of the verse, and Hard hides 100% of the verse.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
                 Toggle("Keep Screen Awake", isOn: $store.keepScreenAwake)
 
                 Text("When enabled, the screen stays on while this app is open.")
@@ -985,6 +1054,16 @@ private struct SettingsView: View {
         let nextValue = (store.speechRateMultiplier + delta).rounded(toPlaces: 1)
         store.speechRateMultiplier = min(max(nextValue, 0.1), 2.0)
     }
+}
+
+private struct PreferredVoiceOption: Identifiable, Hashable {
+    static let systemDefault = PreferredVoiceOption(
+        id: "__system_default__",
+        displayName: "System Default"
+    )
+
+    let id: String
+    let displayName: String
 }
 
 private extension Double {
@@ -1152,6 +1231,7 @@ private struct VerseRow: View {
     let translation: Translation
     @ObservedObject var speaker: VerseSpeaker
     let speedMultiplier: Double
+    let preferredVoiceIdentifier: String?
     let isPassed: Bool
     let onEdit: () -> Void
     let onDelete: () -> Void
@@ -1213,7 +1293,8 @@ private struct VerseRow: View {
                             verseID: card.id,
                             text: card.verse.text(for: translation),
                             translation: translation,
-                            speedMultiplier: speedMultiplier
+                            speedMultiplier: speedMultiplier,
+                            preferredVoiceIdentifier: preferredVoiceIdentifier
                         )
                     } label: {
                         Image(systemName: speaker.iconName(for: card.id))
@@ -1310,7 +1391,8 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
         verseID: UUID,
         text: String,
         translation: Translation,
-        speedMultiplier: Double
+        speedMultiplier: Double,
+        preferredVoiceIdentifier: String?
     ) {
         if activePlayback?.verseID == verseID {
             if isPaused || synthesizer.isPaused {
@@ -1340,6 +1422,7 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
             verseID: verseID,
             text: text,
             translation: translation,
+            preferredVoiceIdentifier: preferredVoiceIdentifier,
             speedMultiplier: speedMultiplier,
             remainingLoops: repeatModes[verseID] ?? .off
         )
@@ -1355,7 +1438,8 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
         let utterance = makeUtterance(
             text: text,
             translation: translation,
-            speedMultiplier: speedMultiplier
+            speedMultiplier: speedMultiplier,
+            preferredVoiceIdentifier: preferredVoiceIdentifier
         )
         synthesizer.speak(utterance)
     }
@@ -1554,7 +1638,8 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
                 makeUtterance(
                     text: playback.text,
                     translation: playback.translation,
-                    speedMultiplier: playback.speedMultiplier
+                    speedMultiplier: playback.speedMultiplier,
+                    preferredVoiceIdentifier: playback.preferredVoiceIdentifier
                 )
             )
         case .twice:
@@ -1565,7 +1650,8 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
                 makeUtterance(
                     text: playback.text,
                     translation: playback.translation,
-                    speedMultiplier: playback.speedMultiplier
+                    speedMultiplier: playback.speedMultiplier,
+                    preferredVoiceIdentifier: playback.preferredVoiceIdentifier
                 )
             )
         case .infinite:
@@ -1575,7 +1661,8 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
                 makeUtterance(
                     text: playback.text,
                     translation: playback.translation,
-                    speedMultiplier: playback.speedMultiplier
+                    speedMultiplier: playback.speedMultiplier,
+                    preferredVoiceIdentifier: playback.preferredVoiceIdentifier
                 )
             )
         }
@@ -1681,14 +1768,102 @@ private final class VerseSpeaker: NSObject, ObservableObject, AVSpeechSynthesize
     private func makeUtterance(
         text: String,
         translation: Translation,
-        speedMultiplier: Double
+        speedMultiplier: Double,
+        preferredVoiceIdentifier: String?
     ) -> AVSpeechUtterance {
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: translation.speechLanguageCode)
+        let utterance = AVSpeechUtterance(string: spokenText(for: text, translation: translation))
+        utterance.voice = preferredVoice(for: translation, preferredIdentifier: preferredVoiceIdentifier)
         let normalizedMultiplier = min(max(speedMultiplier, 0.1), 2.0)
         let scaledRate = AVSpeechUtteranceDefaultSpeechRate * Float(normalizedMultiplier)
         utterance.rate = min(max(scaledRate, AVSpeechUtteranceMinimumSpeechRate), AVSpeechUtteranceMaximumSpeechRate)
         return utterance
+    }
+
+    static func availableVoiceOptions(for translation: Translation) -> [PreferredVoiceOption] {
+        let matchingVoices = AVSpeechSynthesisVoice.speechVoices()
+            .filter {
+                $0.language == translation.speechLanguageCode
+                || $0.language.hasPrefix(translation.speechLanguageCode.split(separator: "-").first.map(String.init) ?? translation.speechLanguageCode)
+            }
+            .sorted {
+                if $0.quality != $1.quality {
+                    return $0.quality.rawValue > $1.quality.rawValue
+                }
+                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+            .map { voice in
+                let qualityLabel: String
+                switch voice.quality {
+                case .enhanced:
+                    qualityLabel = "Enhanced"
+                case .premium:
+                    qualityLabel = "Premium"
+                default:
+                    qualityLabel = "Standard"
+                }
+                return PreferredVoiceOption(
+                    id: voice.identifier,
+                    displayName: "\(voice.name) (\(qualityLabel))"
+                )
+            }
+
+        return [PreferredVoiceOption.systemDefault] + matchingVoices
+    }
+
+    private func preferredVoice(for translation: Translation, preferredIdentifier: String?) -> AVSpeechSynthesisVoice? {
+        let voices = AVSpeechSynthesisVoice.speechVoices()
+        let exactCode = translation.speechLanguageCode
+
+        if let preferredIdentifier,
+           let explicitVoice = voices.first(where: {
+               $0.identifier == preferredIdentifier
+               && ($0.language == exactCode || $0.language.hasPrefix(exactCode.split(separator: "-").first.map(String.init) ?? exactCode))
+           }) {
+            return explicitVoice
+        }
+
+        if let preferred = voices.first(where: { $0.language == exactCode && $0.quality == .enhanced }) {
+            return preferred
+        }
+
+        if let exact = voices.first(where: { $0.language == exactCode }) {
+            return exact
+        }
+
+        let baseCode = exactCode.split(separator: "-").first.map(String.init) ?? exactCode
+        if let familyPreferred = voices.first(where: { $0.language.hasPrefix(baseCode) && $0.quality == .enhanced }) {
+            return familyPreferred
+        }
+
+        if let family = voices.first(where: { $0.language.hasPrefix(baseCode) }) {
+            return family
+        }
+
+        return AVSpeechSynthesisVoice(language: exactCode)
+    }
+
+    private func spokenText(for text: String, translation: Translation) -> String {
+        let normalized = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\n", with: ", ")
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        switch translation {
+        case .korean:
+            return normalized
+                .replacingOccurrences(of: "____", with: "...")
+                .replacingOccurrences(of: "_", with: "")
+                .replacingOccurrences(of: "…", with: "...")
+                .replacingOccurrences(of: "\"", with: "")
+                .replacingOccurrences(of: "'", with: "")
+                .replacingOccurrences(of: "  ", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        default:
+            return normalized
+                .replacingOccurrences(of: "____", with: "...")
+                .replacingOccurrences(of: "…", with: "...")
+        }
     }
 }
 
@@ -2448,6 +2623,7 @@ private struct ActivePlayback {
     let verseID: UUID
     let text: String
     let translation: Translation
+    let preferredVoiceIdentifier: String?
     let speedMultiplier: Double
     var remainingLoops: RepeatMode
 }
