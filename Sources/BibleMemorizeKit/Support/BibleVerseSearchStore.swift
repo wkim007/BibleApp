@@ -183,7 +183,17 @@ enum BibleVerseSearchStore {
             return nil
         }
 
-        return verseLines.joined(separator: " ")
+        if verseLines.count == 1 {
+            return verseLines[0]
+        }
+
+        return verseLines
+            .map { verseLine in
+                let trimmed = verseLine.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard let lastCharacter = trimmed.last else { return trimmed }
+                return [".", "!", "?"].contains(lastCharacter) ? trimmed : "\(trimmed)."
+            }
+            .joined(separator: " ")
     }
 
     private static func sqliteMessage(from database: OpaquePointer?) -> String {
