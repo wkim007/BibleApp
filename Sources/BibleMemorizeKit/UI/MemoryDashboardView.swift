@@ -983,19 +983,28 @@ private struct FindVerseView: View {
                             runSearch()
                         }
 
-                    Button {
-                        isSearchFieldFocused = false
-                        runSearch()
-                    } label: {
-                        HStack {
-                            if isSearching {
-                                SwiftUI.ProgressView()
-                                    .controlSize(.small)
+                    HStack(spacing: 12) {
+                        Button {
+                            isSearchFieldFocused = false
+                            runSearch()
+                        } label: {
+                            HStack {
+                                if isSearching {
+                                    SwiftUI.ProgressView()
+                                        .controlSize(.small)
+                                }
+                                Text("Find")
                             }
-                            Text("Find")
                         }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSearching)
+
+                        Button("Clear") {
+                            clearResults()
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(results.isEmpty && selectedResult == nil && errorMessage == nil)
                     }
-                    .disabled(searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSearching)
 
                     if let errorMessage {
                         Text(errorMessage)
@@ -1004,16 +1013,14 @@ private struct FindVerseView: View {
                     }
                 }
 
-                Section("Results") {
+                Section("Results (\(results.count))") {
                     if results.isEmpty {
                         Text("Search results will appear here.")
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(results) { result in
-                            VStack(alignment: .leading, spacing: 8) {
-                                Button {
-                                    selectedResult = result
-                                } label: {
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack(alignment: .top, spacing: 12) {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(result.formattedReference)
                                             .font(.headline)
@@ -1023,17 +1030,31 @@ private struct FindVerseView: View {
                                             .font(.subheadline)
                                             .foregroundStyle(.secondary)
                                     }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                                .buttonStyle(.plain)
 
-                                Button {
-                                    duplicateMessage = onAddResult(result)
-                                } label: {
-                                    Label("Add This Verse", systemImage: "plus.circle.fill")
-                                        .frame(maxWidth: .infinity)
+                                    Spacer(minLength: 0)
+
+                                    Button {
+                                        duplicateMessage = onAddResult(result)
+                                    } label: {
+                                        Image(systemName: "plus.circle.fill")
+                                            .font(.title3)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel("Add this verse")
                                 }
-                                .buttonStyle(.borderedProminent)
+
+                                if selectedResult?.id == result.id {
+                                    Divider()
+                                    Text(result.verseText)
+                                        .font(.body)
+                                        .foregroundStyle(.primary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                selectedResult = result
                             }
                         }
                     }
@@ -1103,6 +1124,13 @@ private struct FindVerseView: View {
             results = []
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func clearResults() {
+        results = []
+        selectedResult = nil
+        errorMessage = nil
+        duplicateMessage = nil
     }
 }
 
