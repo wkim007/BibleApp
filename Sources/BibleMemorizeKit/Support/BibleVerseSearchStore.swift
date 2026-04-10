@@ -43,6 +43,19 @@ enum BibleSearchVersion: String, CaseIterable, Identifiable {
             return "RVR1960"
         }
     }
+
+    static func from(translation: Translation) -> BibleSearchVersion? {
+        switch translation {
+        case .korean:
+            return .korean
+        case .kjv, .nkjv:
+            return .english
+        case .spanish:
+            return .spanish
+        case .chinese, .japanese, .german:
+            return nil
+        }
+    }
 }
 
 enum BibleVerseSearchStore {
@@ -111,6 +124,66 @@ enum BibleVerseSearchStore {
         }
 
         return results
+    }
+
+    static func verseText(
+        reference: BibleReference,
+        translation: Translation
+    ) throws -> String? {
+        guard let version = BibleSearchVersion.from(translation: translation) else {
+            return nil
+        }
+        guard let canonicalBookName = BibleBook.from(name: reference.book)?.rawValue else {
+            return nil
+        }
+        guard let databaseURL = Bundle.module.url(forResource: "bible", withExtension: "db") else {
+            throw SearchError.databaseNotFound
+        }
+
+        var database: OpaquePointer?
+        guard sqlite3_open_v2(databaseURL.path, &database, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let database else {
+            throw SearchError.openFailed(message: sqliteMessage(from: database))
+        }
+        defer { sqlite3_close(database) }
+
+        let sql = """
+        SELECT verse_texts.verse_text
+        FROM verse_texts
+        JOIN versions ON versions.version_id = verse_texts.version_id
+        JOIN verses ON verses.verse_id = verse_texts.verse_id
+        JOIN books ON books.book_id = verses.book_id
+        WHERE versions.version_code = ?
+          AND books.eng_full = ?
+          AND verses.chapter_num = ?
+          AND verses.verse_num >= ?
+          AND verses.verse_num <= ?
+        ORDER BY verses.verse_num
+        """
+
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
+            throw SearchError.prepareFailed(message: sqliteMessage(from: database))
+        }
+        defer { sqlite3_finalize(statement) }
+
+        let verseEnd = reference.verseEnd ?? reference.verseStart
+        sqlite3_bind_text(statement, 1, version.databaseVersionCode, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(statement, 2, canonicalBookName, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_int(statement, 3, Int32(reference.chapter))
+        sqlite3_bind_int(statement, 4, Int32(reference.verseStart))
+        sqlite3_bind_int(statement, 5, Int32(verseEnd))
+
+        var verseLines: [String] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let cString = sqlite3_column_text(statement, 0) else { continue }
+            verseLines.append(String(cString: cString))
+        }
+
+        guard !verseLines.isEmpty else {
+            return nil
+        }
+
+        return verseLines.joined(separator: " ")
     }
 
     private static func sqliteMessage(from database: OpaquePointer?) -> String {

@@ -709,6 +709,7 @@ private struct AddVerseView: View {
     @State private var tagsText = ""
     @State private var difficulty: VerseDifficulty = .medium
     @State private var assignmentType: VerseAssignmentType = .dueNow
+    @State private var verseLookupMessage: String?
 
     private var isValid: Bool {
         !verseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -723,116 +724,17 @@ private struct AddVerseView: View {
         return Array(1...maxVerse)
     }
 
+    private var availableSearchVersion: BibleSearchVersion? {
+        BibleSearchVersion.from(translation: selectedTranslation)
+    }
+
+    private var searchButtonColor: Color {
+        availableSearchVersion == nil ? .secondary.opacity(0.5) : .blue
+    }
+
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Reference") {
-                    Picker("Bible Version", selection: $selectedTranslation) {
-                        ForEach(Translation.allCases) { translation in
-                            Text(translation.rawValue).tag(translation)
-                        }
-                    }
-
-                    Menu {
-                        Picker("Book", selection: $selectedBook) {
-                            ForEach(BibleBook.allCases) { book in
-                                Text(book.displayName(for: selectedTranslation)).tag(book)
-                            }
-                        }
-                    } label: {
-                        HStack {
-                            Text("Book")
-                            Spacer()
-                            Text(selectedBook.displayName(for: selectedTranslation))
-                                .foregroundStyle(.tint)
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Picker("Chapter", selection: $selectedChapter) {
-                        ForEach(availableChapters, id: \.self) { chapter in
-                            Text("\(chapter)").tag(chapter)
-                        }
-                    }
-                    .pickerStyle(.menu)
-
-                    Picker("Verse Start", selection: $selectedVerseStart) {
-                        ForEach(availableVerses, id: \.self) { verse in
-                            Text("\(verse)").tag(verse)
-                        }
-                    }
-                    .pickerStyle(.menu)
-
-                    Toggle("Use Verse End", isOn: $selectedVerseEndEnabled)
-
-                    if selectedVerseEndEnabled {
-                        Picker("Verse End", selection: $selectedVerseEnd) {
-                            ForEach(availableVerses.filter { $0 >= selectedVerseStart }, id: \.self) { verse in
-                                Text("\(verse)").tag(verse)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                    }
-                }
-
-                Section("Content") {
-                    Picker("Type", selection: $assignmentType) {
-                        ForEach(VerseAssignmentType.allCases) { type in
-                            Text(type.rawValue).tag(type)
-                        }
-                    }
-
-                    TextField("Tags (comma separated)", text: $tagsText)
-
-                    Picker("Difficulty", selection: $difficulty) {
-                        ForEach(VerseDifficulty.allCases) { level in
-                            Text(level.rawValue.capitalized).tag(level)
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Text("Verse Text")
-                            Spacer()
-                            if dictationRecorder.isRecording {
-                                VoiceInputIndicator(level: dictationRecorder.inputLevel)
-                                    .frame(width: 140)
-                            }
-                            Button {
-                                dictationRecorder.reset()
-                            } label: {
-                                Image(systemName: "arrow.counterclockwise.circle.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(dictationRecorder.canReset ? .orange : .secondary.opacity(0.5))
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(!dictationRecorder.canReset)
-                            .accessibilityLabel("Reset voice input")
-
-                            Button {
-                                dictationRecorder.toggleRecording(translation: selectedTranslation)
-                            } label: {
-                                Image(systemName: dictationRecorder.isRecording ? "pause.circle.fill" : "mic.circle.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(dictationRecorder.isRecording ? .red : .blue)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(dictationRecorder.isRecording ? "Pause voice input" : (dictationRecorder.isPaused ? "Resume voice input" : "Start voice input"))
-                        }
-
-                        TextField("Verse Text", text: $verseText, axis: .vertical)
-                            .lineLimit(5...10)
-
-                        if let statusMessage = dictationRecorder.statusMessage {
-                            Text(statusMessage)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
+            Form { formContent }
             .navigationTitle("Add Verse")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -874,6 +776,143 @@ private struct AddVerseView: View {
         }
         .onChange(of: dictationRecorder.transcript) { _, transcript in
             verseText = transcript
+        }
+    }
+
+    @ViewBuilder
+    private var formContent: some View {
+        referenceSection
+        contentSection
+    }
+
+    private var referenceSection: some View {
+        Section("Reference") {
+            Picker("Bible Version", selection: $selectedTranslation) {
+                ForEach(Translation.allCases) { translation in
+                    Text(translation.rawValue).tag(translation)
+                }
+            }
+
+            Menu {
+                Picker("Book", selection: $selectedBook) {
+                    ForEach(BibleBook.allCases) { book in
+                        Text(book.displayName(for: selectedTranslation)).tag(book)
+                    }
+                }
+            } label: {
+                HStack {
+                    Text("Book")
+                    Spacer()
+                    Text(selectedBook.displayName(for: selectedTranslation))
+                        .foregroundStyle(.tint)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Picker("Chapter", selection: $selectedChapter) {
+                ForEach(availableChapters, id: \.self) { chapter in
+                    Text("\(chapter)").tag(chapter)
+                }
+            }
+            .pickerStyle(.menu)
+
+            Picker("Verse Start", selection: $selectedVerseStart) {
+                ForEach(availableVerses, id: \.self) { verse in
+                    Text("\(verse)").tag(verse)
+                }
+            }
+            .pickerStyle(.menu)
+
+            Toggle("Use Verse End", isOn: $selectedVerseEndEnabled)
+
+            if selectedVerseEndEnabled {
+                Picker("Verse End", selection: $selectedVerseEnd) {
+                    ForEach(availableVerses.filter { $0 >= selectedVerseStart }, id: \.self) { verse in
+                        Text("\(verse)").tag(verse)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+        }
+    }
+
+    private var contentSection: some View {
+        Section("Content") {
+            Picker("Type", selection: $assignmentType) {
+                ForEach(VerseAssignmentType.allCases) { type in
+                    Text(type.rawValue).tag(type)
+                }
+            }
+
+            TextField("Tags (comma separated)", text: $tagsText)
+
+            Picker("Difficulty", selection: $difficulty) {
+                ForEach(VerseDifficulty.allCases) { level in
+                    Text(level.rawValue.capitalized).tag(level)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                verseTextHeader
+
+                TextField("Verse Text", text: $verseText, axis: .vertical)
+                    .lineLimit(5...10)
+
+                if let verseLookupMessage {
+                    Text(verseLookupMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let statusMessage = dictationRecorder.statusMessage {
+                    Text(statusMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var verseTextHeader: some View {
+        HStack {
+            Text("Verse Text")
+            Spacer()
+            if dictationRecorder.isRecording {
+                VoiceInputIndicator(level: dictationRecorder.inputLevel)
+                    .frame(width: 140)
+            }
+            Button {
+                loadVerseTextFromDatabase()
+            } label: {
+                Image(systemName: "magnifyingglass.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(searchButtonColor)
+            }
+            .buttonStyle(.plain)
+            .disabled(availableSearchVersion == nil)
+            .accessibilityLabel("Find verse text")
+            Button {
+                dictationRecorder.reset()
+            } label: {
+                Image(systemName: "arrow.counterclockwise.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(dictationRecorder.canReset ? .orange : .secondary.opacity(0.5))
+            }
+            .buttonStyle(.plain)
+            .disabled(!dictationRecorder.canReset)
+            .accessibilityLabel("Reset voice input")
+
+            Button {
+                dictationRecorder.toggleRecording(translation: selectedTranslation)
+            } label: {
+                Image(systemName: dictationRecorder.isRecording ? "pause.circle.fill" : "mic.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(dictationRecorder.isRecording ? .red : .blue)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(dictationRecorder.isRecording ? "Pause voice input" : (dictationRecorder.isPaused ? "Resume voice input" : "Start voice input"))
         }
     }
 
@@ -939,6 +978,26 @@ private struct AddVerseView: View {
 
         dismiss()
     }
+
+    private func loadVerseTextFromDatabase() {
+        verseLookupMessage = nil
+        let reference = BibleReference(
+            book: selectedBook.rawValue,
+            chapter: selectedChapter,
+            verseStart: selectedVerseStart,
+            verseEnd: selectedVerseEndEnabled ? selectedVerseEnd : nil
+        )
+
+        do {
+            if let text = try BibleVerseSearchStore.verseText(reference: reference, translation: selectedTranslation) {
+                verseText = text
+            } else {
+                verseLookupMessage = "No verse text was found for this Bible version and reference."
+            }
+        } catch {
+            verseLookupMessage = error.localizedDescription
+        }
+    }
 }
 
 private struct AddVerseDraft {
@@ -955,14 +1014,29 @@ private struct FindVerseView: View {
 
     let onAddResult: (BibleSearchResult) -> String?
     let onUseResult: (BibleSearchResult) -> Void
+    let showsAddResultButton: Bool
+    let initialVersion: BibleSearchVersion
     @FocusState private var isSearchFieldFocused: Bool
-    @State private var searchVersion: BibleSearchVersion = .korean
+    @State private var searchVersion: BibleSearchVersion
     @State private var searchText = ""
     @State private var results: [BibleSearchResult] = []
     @State private var selectedResult: BibleSearchResult?
     @State private var isSearching = false
     @State private var errorMessage: String?
     @State private var duplicateMessage: String?
+
+    init(
+        onAddResult: @escaping (BibleSearchResult) -> String?,
+        onUseResult: @escaping (BibleSearchResult) -> Void,
+        showsAddResultButton: Bool = true,
+        initialVersion: BibleSearchVersion = .korean
+    ) {
+        self.onAddResult = onAddResult
+        self.onUseResult = onUseResult
+        self.showsAddResultButton = showsAddResultButton
+        self.initialVersion = initialVersion
+        _searchVersion = State(initialValue: initialVersion)
+    }
 
     var body: some View {
         NavigationStack {
@@ -1033,14 +1107,16 @@ private struct FindVerseView: View {
 
                                     Spacer(minLength: 0)
 
-                                    Button {
-                                        duplicateMessage = onAddResult(result)
-                                    } label: {
-                                        Image(systemName: "plus.circle.fill")
-                                            .font(.title3)
+                                    if showsAddResultButton {
+                                        Button {
+                                            duplicateMessage = onAddResult(result)
+                                        } label: {
+                                            Image(systemName: "plus.circle.fill")
+                                                .font(.title3)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .accessibilityLabel("Add this verse")
                                     }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel("Add this verse")
                                 }
 
                                 if selectedResult?.id == result.id {
@@ -1394,6 +1470,7 @@ private struct StatCard: View {
 private struct EditVerseView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var dictationRecorder = VerseDictationRecorder()
+    @State private var verseLookupMessage: String?
 
     let reference: BibleReference
     @Binding var translation: Translation
@@ -1405,58 +1482,17 @@ private struct EditVerseView: View {
         !verseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private var availableSearchVersion: BibleSearchVersion? {
+        BibleSearchVersion.from(translation: translation)
+    }
+
+    private var searchButtonColor: Color {
+        availableSearchVersion == nil ? .secondary.opacity(0.5) : .blue
+    }
+
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Reference") {
-                    LabeledContent("Verse") {
-                        Text(reference.formatted(for: translation))
-                    }
-
-                    Picker("Bible Version", selection: $translation) {
-                        ForEach(Translation.allCases) { version in
-                            Text(version.rawValue).tag(version)
-                        }
-                    }
-                }
-
-                Section("Verse Text") {
-                    Picker("Type", selection: $assignmentType) {
-                        ForEach(VerseAssignmentType.allCases) { type in
-                            Text(type.rawValue).tag(type)
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Text("Verse Text")
-                            Spacer()
-                            if dictationRecorder.isRecording {
-                                VoiceInputIndicator(level: dictationRecorder.inputLevel)
-                                    .frame(width: 140)
-                            }
-                            Button {
-                                dictationRecorder.toggleRecording(translation: translation)
-                            } label: {
-                                Image(systemName: dictationRecorder.isRecording ? "waveform.circle.fill" : "mic.circle.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(dictationRecorder.isRecording ? .red : .blue)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(dictationRecorder.isRecording ? "Stop voice input" : "Start voice input")
-                        }
-
-                        TextEditor(text: $verseText)
-                            .frame(minHeight: 220)
-
-                        if let statusMessage = dictationRecorder.statusMessage {
-                            Text(statusMessage)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
+            Form { editFormContent }
             .navigationTitle("Edit Verse")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -1482,6 +1518,99 @@ private struct EditVerseView: View {
         }
         .onChange(of: dictationRecorder.transcript) { _, transcript in
             verseText = transcript
+        }
+    }
+
+    @ViewBuilder
+    private var editFormContent: some View {
+        editReferenceSection
+        editVerseTextSection
+    }
+
+    private var editReferenceSection: some View {
+        Section("Reference") {
+            LabeledContent("Verse") {
+                Text(reference.formatted(for: translation))
+            }
+
+            Picker("Bible Version", selection: $translation) {
+                ForEach(Translation.allCases) { version in
+                    Text(version.rawValue).tag(version)
+                }
+            }
+        }
+    }
+
+    private var editVerseTextSection: some View {
+        Section("Verse Text") {
+            Picker("Type", selection: $assignmentType) {
+                ForEach(VerseAssignmentType.allCases) { type in
+                    Text(type.rawValue).tag(type)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                editVerseTextHeader
+
+                TextEditor(text: $verseText)
+                    .frame(minHeight: 220)
+
+                if let verseLookupMessage {
+                    Text(verseLookupMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let statusMessage = dictationRecorder.statusMessage {
+                    Text(statusMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var editVerseTextHeader: some View {
+        HStack {
+            Text("Verse Text")
+            Spacer()
+            if dictationRecorder.isRecording {
+                VoiceInputIndicator(level: dictationRecorder.inputLevel)
+                    .frame(width: 140)
+            }
+            Button {
+                loadVerseTextFromDatabase()
+            } label: {
+                Image(systemName: "magnifyingglass.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(searchButtonColor)
+            }
+            .buttonStyle(.plain)
+            .disabled(availableSearchVersion == nil)
+            .accessibilityLabel("Find verse text")
+            Button {
+                dictationRecorder.toggleRecording(translation: translation)
+            } label: {
+                Image(systemName: dictationRecorder.isRecording ? "waveform.circle.fill" : "mic.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(dictationRecorder.isRecording ? .red : .blue)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(dictationRecorder.isRecording ? "Stop voice input" : "Start voice input")
+        }
+    }
+
+    private func loadVerseTextFromDatabase() {
+        verseLookupMessage = nil
+
+        do {
+            if let text = try BibleVerseSearchStore.verseText(reference: reference, translation: translation) {
+                verseText = text
+            } else {
+                verseLookupMessage = "No verse text was found for this Bible version and reference."
+            }
+        } catch {
+            verseLookupMessage = error.localizedDescription
         }
     }
 }
