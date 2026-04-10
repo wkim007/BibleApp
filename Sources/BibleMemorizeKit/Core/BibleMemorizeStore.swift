@@ -159,7 +159,11 @@ public final class BibleMemorizeStore {
         tags: [String],
         difficulty: VerseDifficulty,
         assignmentType: VerseAssignmentType = .dueNow
-    ) {
+    ) -> Bool {
+        guard !containsVerse(reference: reference, translation: translation) else {
+            return false
+        }
+
         let verse = MemoryVerse(
             reference: reference,
             defaultTranslation: translation,
@@ -173,6 +177,19 @@ public final class BibleMemorizeStore {
         card.nextReviewDate = placement.nextReviewDate
         card.sortOrder = placement.sortOrder
         cards.insert(card, at: 0)
+        return true
+    }
+
+    public func containsVerse(reference: BibleReference, translation: Translation) -> Bool {
+        let normalizedBook = normalizeBookName(reference.book)
+
+        return cards.contains { card in
+            card.verse.defaultTranslation == translation
+                && normalizeBookName(card.verse.reference.book) == normalizedBook
+                && card.verse.reference.chapter == reference.chapter
+                && card.verse.reference.verseStart == reference.verseStart
+                && card.verse.reference.verseEnd == reference.verseEnd
+        }
     }
 
     public func updateVerseText(cardID: UUID, translation: Translation, text: String) {
@@ -545,5 +562,9 @@ public final class BibleMemorizeStore {
 
     private func clearPassedState(for cardID: UUID) {
         passedPromptIDs.remove(cardID)
+    }
+
+    private func normalizeBookName(_ name: String) -> String {
+        BibleBook.from(name: name)?.rawValue ?? name
     }
 }

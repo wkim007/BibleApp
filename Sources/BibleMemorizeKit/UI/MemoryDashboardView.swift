@@ -11,6 +11,8 @@ public struct MemoryDashboardView: View {
     @StateObject private var speaker = VerseSpeaker()
     @StateObject private var recitationRecognizer = VerseRecitationRecognizer()
     @State private var isShowingAddVerse = false
+    @State private var isShowingFindVerse = false
+    @State private var addVerseDraft: AddVerseDraft?
     @State private var editingCard: MemorizationCard?
     @State private var editingVerseText = ""
     @State private var editingVerseTranslation: Translation = .nkjv
@@ -50,23 +52,55 @@ public struct MemoryDashboardView: View {
                 }
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {
-                        Button {
-                            isShowingAddVerse = true
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .overlay(alignment: .topTrailing) {
-                                    if viewModel.store.isOpenAIEnabled {
-                                        Image(systemName: "sparkles")
-                                            .font(.caption2.bold())
-                                            .foregroundStyle(.green)
-                                            .offset(x: 5, y: -5)
+                        HStack(spacing: 10) {
+                            Button {
+                                isShowingFindVerse = true
+                            } label: {
+                                Image(systemName: "magnifyingglass.circle.fill")
+                            }
+
+                            Button {
+                                isShowingAddVerse = true
+                            } label: {
+                                Image(systemName: "plus.circle.fill")
+                                    .overlay(alignment: .topTrailing) {
+                                        if viewModel.store.isOpenAIEnabled {
+                                            Image(systemName: "sparkles")
+                                                .font(.caption2.bold())
+                                                .foregroundStyle(.green)
+                                                .offset(x: 5, y: -5)
+                                        }
                                     }
-                                }
+                            }
                         }
                     }
                 }
                 .sheet(isPresented: $isShowingAddVerse) {
-                    AddVerseView(store: viewModel.store)
+                    AddVerseView(store: viewModel.store, initialDraft: addVerseDraft)
+                }
+                .sheet(isPresented: $isShowingFindVerse) {
+                    FindVerseView(
+                        onAddResult: { result in
+                            if addSearchResultToDueNow(result) {
+                                isShowingFindVerse = false
+                                return nil
+                            }
+                            return "That verse already exists in Due Now or Upcoming for this Bible version."
+                        },
+                        onUseResult: { result in
+                            guard let book = BibleBook.from(name: result.canonicalBookName) else { return }
+                            addVerseDraft = AddVerseDraft(
+                                translation: result.translation,
+                                book: book,
+                                chapter: result.reference.chapter,
+                                verseStart: result.reference.verseStart,
+                                verseEnd: result.reference.verseEnd,
+                                verseText: result.verseText
+                            )
+                            isShowingFindVerse = false
+                            isShowingAddVerse = true
+                        }
+                    )
                 }
                 .sheet(item: $editingCard) { card in
                     EditVerseView(
@@ -418,6 +452,24 @@ public struct MemoryDashboardView: View {
             }
     }
 
+    private func addSearchResultToDueNow(_ result: BibleSearchResult) -> Bool {
+        let reference = BibleReference(
+            book: result.canonicalBookName,
+            chapter: result.reference.chapter,
+            verseStart: result.reference.verseStart,
+            verseEnd: result.reference.verseEnd
+        )
+
+        return viewModel.store.addVerse(
+            reference: reference,
+            translation: result.translation,
+            text: result.verseText,
+            tags: [],
+            difficulty: .medium,
+            assignmentType: .dueNow
+        )
+    }
+
     @ViewBuilder
     private func controls(for prompt: SessionPrompt, isPromptPassed: Bool) -> some View {
         let shouldHighlightMic = highlightedMicPromptID == prompt.cardID && !isPromptPassed
@@ -646,6 +698,7 @@ private struct AddVerseView: View {
     @Bindable var store: BibleMemorizeStore
     @StateObject private var dictationRecorder = VerseDictationRecorder()
 
+    let initialDraft: AddVerseDraft?
     @State private var selectedTranslation: Translation = .nkjv
     @State private var selectedBook: BibleBook = .john
     @State private var selectedChapter = 1
@@ -797,8 +850,7 @@ private struct AddVerseView: View {
             }
         }
         .onAppear {
-            selectedTranslation = store.selectedTranslation
-            normalizeReferenceSelection()
+            applyInitialDraftIfNeeded()
         }
         .onDisappear {
             dictationRecorder.stop()
@@ -843,6 +895,21 @@ private struct AddVerseView: View {
         }
     }
 
+    private func applyInitialDraftIfNeeded() {
+        if let initialDraft {
+            selectedTranslation = initialDraft.translation
+            selectedBook = initialDraft.book
+            selectedChapter = initialDraft.chapter
+            selectedVerseStart = initialDraft.verseStart
+            selectedVerseEndEnabled = initialDraft.verseEnd != nil
+            selectedVerseEnd = initialDraft.verseEnd ?? initialDraft.verseStart
+            verseText = initialDraft.verseText
+        } else {
+            selectedTranslation = store.selectedTranslation
+        }
+        normalizeReferenceSelection()
+    }
+
     private func saveVerse() {
         let tags = tagsText
             .split(separator: ",")
@@ -856,7 +923,7 @@ private struct AddVerseView: View {
             verseEnd: selectedVerseEndEnabled ? selectedVerseEnd : nil
         )
 
-        store.addVerse(
+        _ = store.addVerse(
             reference: reference,
             translation: selectedTranslation,
             text: verseText.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -871,6 +938,171 @@ private struct AddVerseView: View {
         )
 
         dismiss()
+    }
+}
+
+private struct AddVerseDraft {
+    let translation: Translation
+    let book: BibleBook
+    let chapter: Int
+    let verseStart: Int
+    let verseEnd: Int?
+    let verseText: String
+}
+
+private struct FindVerseView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let onAddResult: (BibleSearchResult) -> String?
+    let onUseResult: (BibleSearchResult) -> Void
+    @FocusState private var isSearchFieldFocused: Bool
+    @State private var searchVersion: BibleSearchVersion = .korean
+    @State private var searchText = ""
+    @State private var results: [BibleSearchResult] = []
+    @State private var selectedResult: BibleSearchResult?
+    @State private var isSearching = false
+    @State private var errorMessage: String?
+    @State private var duplicateMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Search") {
+                    Picker("Bible Version", selection: $searchVersion) {
+                        ForEach(BibleSearchVersion.allCases) { version in
+                            Text(version.rawValue).tag(version)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    TextField("Enter a word", text: $searchText)
+                        .focused($isSearchFieldFocused)
+                        .submitLabel(.search)
+                        .onSubmit {
+                            isSearchFieldFocused = false
+                            runSearch()
+                        }
+
+                    Button {
+                        isSearchFieldFocused = false
+                        runSearch()
+                    } label: {
+                        HStack {
+                            if isSearching {
+                                SwiftUI.ProgressView()
+                                    .controlSize(.small)
+                            }
+                            Text("Find")
+                        }
+                    }
+                    .disabled(searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSearching)
+
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Section("Results") {
+                    if results.isEmpty {
+                        Text("Search results will appear here.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(results) { result in
+                            VStack(alignment: .leading, spacing: 8) {
+                                Button {
+                                    selectedResult = result
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(result.formattedReference)
+                                            .font(.headline)
+                                            .foregroundStyle(.primary)
+                                        Text(result.verseText)
+                                            .lineLimit(2)
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .buttonStyle(.plain)
+
+                                Button {
+                                    duplicateMessage = onAddResult(result)
+                                } label: {
+                                    Label("Add This Verse", systemImage: "plus.circle.fill")
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
+                        }
+                    }
+                }
+
+                if let selectedResult {
+                    Section("Selected Verse") {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(selectedResult.formattedReference)
+                                .font(.headline)
+                            Text(selectedResult.verseText)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Button("Use This Verse") {
+                                onUseResult(selectedResult)
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Find Verse")
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    isSearchFieldFocused = false
+                }
+            )
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") {
+                        dismiss()
+                    }
+                }
+            }
+            .alert("Verse Already Exists", isPresented: Binding(
+                get: { duplicateMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        duplicateMessage = nil
+                    }
+                }
+            )) {
+                Button("OK", role: .cancel) {
+                    duplicateMessage = nil
+                }
+            } message: {
+                Text(duplicateMessage ?? "")
+            }
+        }
+    }
+
+    private func runSearch() {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        isSearching = true
+        errorMessage = nil
+        selectedResult = nil
+
+        defer { isSearching = false }
+
+        do {
+            results = try BibleVerseSearchStore.search(term: trimmed, version: searchVersion)
+            if results.isEmpty {
+                errorMessage = "No verses matched that word."
+            }
+        } catch {
+            results = []
+            errorMessage = error.localizedDescription
+        }
     }
 }
 

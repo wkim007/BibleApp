@@ -16,7 +16,10 @@ let package = Package(
     targets: [
         .target(
             name: "BibleMemorizeKit",
-            path: "Sources/BibleMemorizeKit"
+            path: "Sources/BibleMemorizeKit",
+            resources: [
+                .process("Resources")
+            ]
         )
     ]
 )

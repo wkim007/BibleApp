@@ -71,7 +71,21 @@ public enum BibleBook: String, CaseIterable, Identifiable, Codable, Sendable {
     public var id: String { rawValue }
 
     public static func from(name: String) -> BibleBook? {
-        Self.allCases.first { $0.rawValue == name }
+        let normalizedName = normalizeBookName(name)
+
+        if let exactMatch = Self.allCases.first(where: { normalizeBookName($0.rawValue) == normalizedName }) {
+            return exactMatch
+        }
+
+        if let koreanMatch = koreanNames.first(where: { normalizeBookName($0.value) == normalizedName }) {
+            return koreanMatch.key
+        }
+
+        if let aliasMatch = englishAliases[normalizedName] {
+            return aliasMatch
+        }
+
+        return nil
     }
 
     public var chapterCount: Int {
@@ -231,4 +245,16 @@ public enum BibleBook: String, CaseIterable, Identifiable, Codable, Sendable {
         .jude: "유다서",
         .revelation: "요한계시록"
     ]
+
+    private static let englishAliases: [String: BibleBook] = [
+        "psalms": .psalm,
+        "song of songs": .songOfSolomon
+    ]
+
+    private static func normalizeBookName(_ name: String) -> String {
+        name
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }
